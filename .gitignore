@@ -1,0 +1,21 @@
+# Large files
+uploads/tv-logos.zip
+
+# Sensitive config files (if any)
+config/config.php
+
+# Upload directories (optional - uncomment if you don't want to track uploads)
+# uploads/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
