@@ -685,7 +685,11 @@ include 'includes/header.php';
                 </h2>
                 <div class="live-tv-channels-grid">
                     <?php foreach (array_slice($live_tv_channels, 0, 12) as $channel): ?>
-                        <div class="live-tv-channel-card <?php echo (($channel['is_premium'] ?? 0) == 1) ? 'premium' : 'free'; ?>" onclick="checkLoginAndPlay('<?php echo !empty($channel['slug']) ? 'tv/' . htmlspecialchars($channel['slug']) : 'tv/tv-channel.php?id=' . $channel['id']; ?>')">
+                        <?php
+                            $channel_url = BASE_URL . (!empty($channel['slug']) ? '/tv/' . htmlspecialchars($channel['slug']) : '/tv/tv-channel.php?id=' . $channel['id']);
+                        ?>
+                        <a href="<?php echo htmlspecialchars($channel_url); ?>"
+                           class="live-tv-channel-card <?php echo (($channel['is_premium'] ?? 0) == 1) ? 'premium' : 'free'; ?>">
                             <div class="live-tv-channel-logo">
                                 <?php if (!empty($channel['logo'])): ?>
                                     <img src="<?php echo htmlspecialchars($channel['logo']); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" onerror="this.style.display='none'">
@@ -710,7 +714,7 @@ include 'includes/header.php';
                                     <p><?php echo htmlspecialchars($channel['description']); ?></p>
                                 <?php endif; ?>
                             </div>
-                        </div>
+                        </a>
                     <?php endforeach; ?>
                 </div>
                 <div style="text-align: center; margin-top: 1.5rem;">

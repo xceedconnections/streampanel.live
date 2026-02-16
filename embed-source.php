@@ -8,6 +8,9 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/admin/includes/functions.php';
 
+// Log request for debugging (especially for Android issues)
+error_log('[embed-source.php] Request: ' . $_SERVER['REQUEST_URI'] . ' | User-Agent: ' . ($_SERVER['HTTP_USER_AGENT'] ?? 'Unknown'));
+
 $conn = getDBConnection();
 
 $slug  = $_GET['slug'] ?? null;

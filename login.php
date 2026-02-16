@@ -1,9 +1,13 @@
 <?php
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/admin/includes/functions.php';
 
 // Initialize database structure to ensure all required tables and columns exist
 initializeDatabase();
+
+$conn = getDBConnection();
+$site_name = getSetting($conn, 'site_name', 'StreamPanel');
 
 $page_title = "Sign In";
 $error = '';
@@ -127,7 +131,7 @@ include 'includes/header.php';
 
 <div class="min-h-screen flex items-center justify-center bg-gradient-to-b from-black via-gray-900 to-black py-20">
     <div class="bg-gray-900 bg-opacity-90 p-8 rounded-lg w-full max-w-md">
-        <h1 class="text-4xl font-bold mb-8 text-center netflix-red">STREAMFLIX</h1>
+        <h1 class="text-4xl font-bold mb-8 text-center netflix-red"><?php echo strtoupper(htmlspecialchars($site_name)); ?></h1>
         
         <!-- Login/Signup Tabs -->
         <div class="flex mb-6 border-b border-gray-700">
@@ -179,7 +183,7 @@ include 'includes/header.php';
         <!-- Signup Form (Hidden by default) -->
         <div id="signup-form" class="hidden">
             <h2 class="text-2xl font-bold mb-6 text-center">Create Your Account</h2>
-            <p class="text-gray-400 text-sm mb-6 text-center">Join StreamFlix to access unlimited movies, TV shows, and live TV</p>
+            <p class="text-gray-400 text-sm mb-6 text-center">Join <?php echo htmlspecialchars($site_name); ?> to access unlimited movies, TV shows, and live TV</p>
             
             <form method="POST" action="register.php">
                 <div class="mb-4">
@@ -215,11 +219,7 @@ include 'includes/header.php';
         </div>
         
         <div class="mt-6 text-center">
-            <p class="text-gray-400 text-sm">By continuing, you agree to StreamFlix's Terms of Service and Privacy Policy</p>
-        </div>
-        
-        <div class="mt-4 text-center">
-            <a href="admin/login.php" class="text-gray-400 hover:text-white text-sm">Admin Login</a>
+            <p class="text-gray-400 text-sm">By continuing, you agree to <?php echo htmlspecialchars($site_name); ?>'s Terms of Service and Privacy Policy</p>
         </div>
     </div>
 </div>

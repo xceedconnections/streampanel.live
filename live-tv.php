@@ -463,8 +463,7 @@ include 'includes/header.php';
                 $channel_url = BASE_URL . (!empty($channel['slug']) ? '/tv/' . htmlspecialchars($channel['slug']) : '/tv/tv-channel.php?id=' . $channel['id']);
             ?>
             <a href="<?php echo htmlspecialchars($channel_url); ?>" 
-               class="live-tv-channel-card <?php echo (($channel['is_premium'] ?? 0) == 1) ? 'premium' : 'free'; ?>" 
-               onclick="return checkLoginAndPlay(event, '<?php echo htmlspecialchars($channel_url); ?>');">
+               class="live-tv-channel-card <?php echo (($channel['is_premium'] ?? 0) == 1) ? 'premium' : 'free'; ?>">
                 <div class="live-tv-channel-logo">
                     <?php if (!empty($channel['logo'])): ?>
                     <img src="<?php echo htmlspecialchars($channel['logo']); ?>" 
@@ -587,8 +586,7 @@ include 'includes/header.php';
                         $channel_url = BASE_URL . (!empty($channel['slug']) ? '/tv/' . htmlspecialchars($channel['slug']) : '/tv/tv-channel.php?id=' . $channel['id']);
                     ?>
                     <a href="<?php echo htmlspecialchars($channel_url); ?>" 
-                       class="live-tv-channel-card <?php echo (($channel['is_premium'] ?? 0) == 1) ? 'premium' : 'free'; ?>" 
-                       onclick="return checkLoginAndPlay(event, '<?php echo htmlspecialchars($channel_url); ?>');">
+                       class="live-tv-channel-card <?php echo (($channel['is_premium'] ?? 0) == 1) ? 'premium' : 'free'; ?>">
                         <div class="live-tv-channel-logo">
                             <?php if (!empty($channel['logo'])): ?>
                                 <img src="<?php echo htmlspecialchars($channel['logo']); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" onerror="this.style.display='none'">

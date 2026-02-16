@@ -7,6 +7,36 @@ require_once __DIR__ . '/admin/includes/functions.php';
 $page_title = "Search Results";
 $conn = getDBConnection();
 
+// Check if login is required for TV channels
+$login_required_tv_channels = '0'; // Default to '0' (login NOT required)
+try {
+    $setting_result = getSetting($conn, 'login_required_tv_channels', '0');
+    if ($setting_result !== false && $setting_result !== null) {
+        $login_required_tv_channels = $setting_result;
+    } else {
+        $direct_query = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'login_required_tv_channels' LIMIT 1");
+        if ($direct_query && $direct_query->num_rows > 0) {
+            $row = $direct_query->fetch_assoc();
+            $login_required_tv_channels = $row['setting_value'] ?? '0';
+        }
+    }
+} catch (Exception $e) {
+    $login_required_tv_channels = '0';
+}
+
+// Check if login is actually required
+$tv_login_required = false;
+if (is_string($login_required_tv_channels)) {
+    $login_required_tv_channels = trim($login_required_tv_channels);
+    $tv_login_required = ($login_required_tv_channels === '1' || $login_required_tv_channels === 'true' || $login_required_tv_channels === 'yes');
+} else {
+    $tv_login_required = ($login_required_tv_channels === 1 || $login_required_tv_channels === true);
+}
+
+if (empty($login_required_tv_channels) || $login_required_tv_channels === '0' || $login_required_tv_channels === 0 || $login_required_tv_channels === false || $login_required_tv_channels === null) {
+    $tv_login_required = false;
+}
+
 $search_query = $_GET['q'] ?? '';
 $type_filter = $_GET['type'] ?? '';
 $category_filter = $_GET['category'] ?? '';
@@ -530,7 +560,7 @@ include 'includes/header.php';
 <script>
 function checkLoginAndPlay(event, url) {
     if (event && event.preventDefault) event.preventDefault();
-    <?php if (!isLoggedIn()): ?>
+    <?php if (!isLoggedIn() && $tv_login_required): ?>
     window.location.href = '<?php echo BASE_URL; ?>/login?redirect=' + encodeURIComponent(url);
     <?php else: ?>
     window.location.href = url;

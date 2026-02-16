@@ -1,9 +1,13 @@
 <?php
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/admin/includes/functions.php';
 
 // Initialize database structure to ensure all required tables and columns exist
 initializeDatabase();
+
+$conn = getDBConnection();
+$site_name = getSetting($conn, 'site_name', 'StreamPanel');
 
 $page_title = "Sign Up";
 $error = '';
@@ -85,7 +89,7 @@ include 'includes/header.php';
 
 <div class="min-h-screen flex items-center justify-center bg-gradient-to-b from-black via-gray-900 to-black py-20">
     <div class="bg-gray-900 bg-opacity-90 p-8 rounded-lg w-full max-w-md">
-        <h1 class="text-4xl font-bold mb-8 text-center netflix-red">Streampanel</h1>
+        <h1 class="text-4xl font-bold mb-8 text-center netflix-red"><?php echo strtoupper(htmlspecialchars($site_name)); ?></h1>
         <h2 class="text-2xl font-bold mb-6 text-center">Sign Up</h2>
         
         <?php if ($error): ?>

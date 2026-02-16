@@ -9,7 +9,14 @@ $message_type = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
     // Define all checkbox settings
-    $checkbox_settings = ['enable_movies', 'enable_tv_shows', 'enable_live_tv', 'maintenance_mode', 'registration_enabled'];
+    $checkbox_settings = ['enable_movies', 'enable_tv_shows', 'enable_live_tv', 'maintenance_mode', 'registration_enabled', 'login_required_tv_channels'];
+    
+    // Ensure all checkbox settings are in POST (with hidden inputs, they should be, but double-check)
+    foreach ($checkbox_settings as $checkbox_key) {
+        if (!isset($_POST[$checkbox_key])) {
+            $_POST[$checkbox_key] = '0'; // Default to unchecked if not in POST
+        }
+    }
     
     // Process all settings (both checkboxes and text inputs)
     foreach ($_POST as $key => $value) {
@@ -179,6 +186,16 @@ while ($row = $result->fetch_assoc()) {
                                    <?php echo ($settings['registration_enabled'] ?? '1') == '1' ? 'checked' : ''; ?>
                                    class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
                             <span>Allow User Registration</span>
+                        </label>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <input type="hidden" name="login_required_tv_channels" value="0">
+                        <label class="flex items-center">
+                            <input type="checkbox" name="login_required_tv_channels" value="1" 
+                                   <?php echo ($settings['login_required_tv_channels'] ?? '0') == '1' ? 'checked' : ''; ?>
+                                   class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
+                            <span>Login Required to View TV Channels</span>
                         </label>
                     </div>
                 </div>

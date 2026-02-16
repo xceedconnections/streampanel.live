@@ -11,15 +11,31 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/admin/includes/functions.php';
 
-$conn = getDBConnection();
-
-// Get ALL active TV channels (not filtering by sources)
-$query = "SELECT id, slug, name 
-          FROM live_tv_channels 
-          WHERE is_active = 1 
-          ORDER BY name ASC";
-
-$channels = $conn->query($query)->fetch_all(MYSQLI_ASSOC);
+try {
+    $conn = getDBConnection();
+    
+    // Get ALL active TV channels (not filtering by sources)
+    $query = "SELECT id, slug, name 
+              FROM live_tv_channels 
+              WHERE is_active = 1 
+              ORDER BY name ASC";
+    
+    $result = $conn->query($query);
+    
+    if ($result === false) {
+        throw new Exception('Database query failed');
+    }
+    
+    $channels = $result->fetch_all(MYSQLI_ASSOC);
+    
+    if ($channels === null) {
+        $channels = [];
+    }
+} catch (Exception $e) {
+    // On error, return empty sitemap
+    $channels = [];
+    error_log('Sitemap error: ' . $e->getMessage());
+}
 
 // Set XML content type
 header('Content-Type: application/xml; charset=utf-8');

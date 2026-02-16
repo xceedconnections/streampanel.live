@@ -8,16 +8,21 @@ require_once __DIR__ . '/../../includes/auth.php';
 
 header('Content-Type: application/json');
 
-// Require login
-if (!isset($_SESSION['user_id'])) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized']);
-    exit;
-}
-
 $conn = getDBConnection();
-$user_id = $_SESSION['user_id'];
+// Allow tracking even without login - user_id can be NULL
+$user_id = $_SESSION['user_id'] ?? null;
+// Ensure session is started for session_id tracking
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 $session_id = session_id();
+// Fallback: if session_id is empty, generate a unique identifier
+if (empty($session_id)) {
+    // Generate a unique session ID based on IP and timestamp
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    $session_id = 'guest_' . md5($ip . $user_agent . time()) . '_' . uniqid();
+}
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 // Create table if it doesn't exist (track by session_id to count unique browser sessions)

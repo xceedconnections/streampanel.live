@@ -9,8 +9,61 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../admin/includes/functions.php';
 
-// Require user to be logged in
-requireLogin();
+$conn = getDBConnection();
+
+// Check if login is required for TV channels
+// Use direct database query as fallback if getSetting fails
+$login_required_tv_channels = '0'; // Default to '0' (login NOT required)
+try {
+    $setting_result = getSetting($conn, 'login_required_tv_channels', '0');
+    if ($setting_result !== false && $setting_result !== null) {
+        $login_required_tv_channels = $setting_result;
+    } else {
+        // Fallback: direct database query
+        $direct_query = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'login_required_tv_channels' LIMIT 1");
+        if ($direct_query && $direct_query->num_rows > 0) {
+            $row = $direct_query->fetch_assoc();
+            $login_required_tv_channels = $row['setting_value'] ?? '0';
+        }
+    }
+} catch (Exception $e) {
+    // On error, default to '0' (login NOT required)
+    error_log("[TV Channel] Error reading login_required_tv_channels setting: " . $e->getMessage());
+    $login_required_tv_channels = '0';
+}
+
+// Debug: Log the setting value (remove after debugging)
+error_log("[TV Channel] login_required_tv_channels setting value: " . var_export($login_required_tv_channels, true) . " (type: " . gettype($login_required_tv_channels) . ")");
+
+// Check if setting is enabled (accept '1', 1, true, or 'true')
+// Also check for string 'true' and trim whitespace
+$login_required = false;
+if (is_string($login_required_tv_channels)) {
+    $login_required_tv_channels = trim($login_required_tv_channels);
+    // Only require login if explicitly set to '1', 'true', or 'yes'
+    $login_required = ($login_required_tv_channels === '1' || $login_required_tv_channels === 'true' || $login_required_tv_channels === 'yes');
+} else {
+    $login_required = ($login_required_tv_channels === 1 || $login_required_tv_channels === true);
+}
+
+// Additional safety: if value is empty, null, or '0', don't require login
+if (empty($login_required_tv_channels) || $login_required_tv_channels === '0' || $login_required_tv_channels === 0 || $login_required_tv_channels === false || $login_required_tv_channels === null) {
+    $login_required = false;
+}
+
+// FINAL CHECK: Only require login if explicitly set to require it
+// Default behavior: ALLOW ACCESS (login NOT required)
+// NOTE: The 'is_free' field in channels is just a label - it does NOT enforce login requirement
+// Only the 'login_required_tv_channels' setting controls whether login is required
+if ($login_required === true) {
+    // Require user to be logged in
+    error_log("[TV Channel] Login required - redirecting to login page. Setting value: " . var_export($login_required_tv_channels, true));
+    requireLogin();
+} else {
+    // Allow access without login (regardless of is_free field)
+    error_log("[TV Channel] Login NOT required - allowing access. Setting value: " . var_export($login_required_tv_channels, true));
+    // Continue processing the page - users can access even if not logged in
+}
 
 // Normalize BASE_URL - remove /tv if present (since this file is in tv/ directory)
 $BASE_URL_NORMALIZED = rtrim(BASE_URL, '/');
@@ -18,7 +71,6 @@ if (strpos($BASE_URL_NORMALIZED, '/tv') !== false) {
     $BASE_URL_NORMALIZED = str_replace('/tv', '', $BASE_URL_NORMALIZED);
 }
 
-$conn = getDBConnection();
 $slug = $_GET['slug'] ?? null;
 $id = $_GET['id'] ?? null;
 // Optional source index (0-based) to choose a specific stream/source
@@ -344,8 +396,8 @@ if ($channel) {
         }
     }
     
-    // Canonical URL
-    $canonical_url = BASE_URL . '/tv/' . ($channel['slug'] ?? 'channel');
+    // Canonical URL should point to main watch page
+    $canonical_url = BASE_URL . '/watch-live-tv/' . ($channel['slug'] ?? 'channel');
     
     // Footer heading
     $footer_heading = "Watch {$channel_name_raw} Live Streaming Free - HD Channel Online";
@@ -354,7 +406,7 @@ if ($channel) {
     $metaDescription = "Requested live TV channel could not be found on {$site_name}.";
     $metaKeywords = "live tv, tv channel, {$site_name}";
     $channel_logo_url = '';
-    $canonical_url = BASE_URL . '/tv';
+    $canonical_url = BASE_URL . '/watch-live-tv';
     $footer_heading = '';
 }
 ?>
@@ -624,10 +676,26 @@ if ($channel) {
     background: #000;
 }
 .player-container-mobile {
-    /* Shorter player on mobile so video controls clear the fixed footer navigation */
-    height: calc(100vh - 80px - 140px); /* header (80px) + footer/nav (~60px) + extra margin */
-    min-height: 360px;
-    max-height: calc(100vh - 220px);
+    /* Default size for tablets and larger mobile devices */
+    height: calc(100vh - 80px - 220px); /* header (80px) + footer/nav (~60px) + extra margin */
+    min-height: 250px;
+    max-height: calc(100vh - 300px);
+}
+/* Smaller height for Android mobile devices only */
+@media (max-width: 480px) {
+    .player-container-mobile {
+        height: calc(100vh - 80px - 380px); /* Much smaller for mobile to show suggested channels */
+        min-height: 180px;
+        max-height: calc(100vh - 460px);
+    }
+}
+/* Medium mobile devices (between 480px and 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+    .player-container-mobile {
+        height: calc(100vh - 80px - 300px);
+        min-height: 220px;
+        max-height: calc(100vh - 380px);
+    }
 }
 .player-container-androidtv {
     position: fixed;
@@ -999,6 +1067,189 @@ if ($channel) {
 .channel-description-section p {
     color: #9ca3af;
     line-height: 1.6;
+}
+
+/* Try Another Source Section */
+.try-another-source-section {
+    padding: 1rem;
+    text-align: center;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    background: rgba(0,0,0,0.3);
+}
+@media (min-width: 768px) {
+    .try-another-source-section {
+        padding: 1.5rem;
+    }
+}
+.try-another-source-text {
+    color: #9ca3af;
+    font-size: 0.875rem;
+    margin-bottom: 0.75rem;
+}
+.try-another-source-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    align-items: center;
+}
+.try-source-link {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background: rgba(229,9,20,0.8);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+.try-source-link:hover {
+    background: rgba(229,9,20,1);
+    transform: scale(1.05);
+    text-decoration: none;
+    color: #fff;
+}
+
+/* Suggested Channels Section */
+.suggested-channels-section {
+    padding: 2rem 1rem;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+@media (min-width: 768px) {
+    .suggested-channels-section {
+        padding: 2rem 3rem;
+    }
+}
+.suggested-channels-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    color: #fff;
+}
+.suggested-channels-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+@media (min-width: 640px) {
+    .suggested-channels-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+@media (min-width: 768px) {
+    .suggested-channels-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+@media (min-width: 1024px) {
+    .suggested-channels-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
+}
+.suggested-channel-card {
+    position: relative;
+    background: #141414;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+.suggested-channel-card:hover {
+    text-decoration: none;
+    color: inherit;
+    transform: scale(1.05);
+}
+.suggested-channel-logo {
+    aspect-ratio: 16/9;
+    background: linear-gradient(to bottom right, rgba(229,9,20,0.2), rgba(37,99,235,0.2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+.suggested-channel-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 1rem;
+}
+.suggested-channel-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    opacity: 0;
+    transition: opacity 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.suggested-channel-card:hover .suggested-channel-overlay {
+    opacity: 1;
+}
+.suggested-channel-play-icon {
+    background: #e50914;
+    border-radius: 50%;
+    padding: 0.75rem;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.suggested-channel-badge {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: #e50914;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    z-index: 10;
+}
+.suggested-channel-card.premium {
+    border: 2px solid rgba(251, 191, 36, 0.6);
+    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+}
+.suggested-channel-card.premium:hover {
+    border-color: rgba(251, 191, 36, 0.9);
+    box-shadow: 0 6px 16px rgba(251, 191, 36, 0.4);
+}
+.suggested-channel-card.free {
+    border: 2px solid rgba(16, 185, 129, 0.4);
+}
+.suggested-channel-card.free:hover {
+    border-color: rgba(16, 185, 129, 0.6);
+}
+.suggested-channel-info {
+    padding: 0.75rem;
+}
+.suggested-channel-name {
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #fff;
+}
+.suggested-channel-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: #9ca3af;
+}
+.suggested-channel-category,
+.suggested-channel-country {
+    padding: 0.25rem 0.5rem;
+    background: rgba(255,255,255,0.1);
+    border-radius: 0.25rem;
 }
 
 /* Ad Overlay Styles */
@@ -1780,18 +2031,39 @@ if ($channel) {
                             $current_source_index = (int)$idx;
                         }
                     }
-                    $slug_param = $slug ? 'slug=' . urlencode($slug) : ('id=' . intval($channel['id']));
+                    // Construct query parameters properly for Firefox compatibility
+                    $query_params = [];
+                    if ($slug) {
+                        $query_params['slug'] = $slug;
+                    } else {
+                        $query_params['id'] = intval($channel['id']);
+                    }
+                    $query_params['source'] = $current_source_index;
+                    
                     $iframe_url = $is_iframe_source && !empty($selected_source['url']) ? htmlspecialchars($selected_source['url'], ENT_QUOTES, 'UTF-8') : '';
+                    
+                    // Use BASE_URL (not normalized) for embed-source.php since it's in root directory
+                    // Ensure absolute URL for Android/Firefox compatibility
+                    $base_url_clean = rtrim(BASE_URL, '/');
+                    // Ensure protocol is included (Android browsers are strict about this)
+                    if (!preg_match('/^https?:\/\//', $base_url_clean)) {
+                        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+                        $base_url_clean = $protocol . ltrim($base_url_clean, '/');
+                    }
+                    // Build URL with properly encoded query string (Firefox is strict about this)
+                    $embed_source_url = $base_url_clean . '/embed-source.php?' . http_build_query($query_params, '', '&', PHP_QUERY_RFC3986);
                 ?>
-                <video id="videoPlayer" class="video-player" controls autoplay playsinline style="<?php echo $is_iframe_or_embed ? 'display: none;' : ''; ?>"></video>
+                <video id="videoPlayer" class="video-player" controls autoplay playsinline muted style="<?php echo $is_iframe_or_embed ? 'display: none;' : ''; ?>"></video>
                 <iframe id="youtubePlayer" class="video-player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="display: none;"></iframe>
                 <div id="html-embed-container" style="<?php echo $is_iframe_or_embed ? 'display: block;' : 'display: none;'; ?> width: 100%; height: 100%;">
                     <?php if ($is_embed_source): ?>
                         <iframe
                             id="embedFrame"
-                            src="<?php echo $BASE_URL_NORMALIZED; ?>/embed-source.php?<?php echo $slug_param; ?>&source=<?php echo $current_source_index; ?>"
+                            src="<?php echo htmlspecialchars($embed_source_url, ENT_QUOTES, 'UTF-8'); ?>"
                             style="width: 100%; height: 100%; border: 0;"
                             allowfullscreen
+                            allow="autoplay; encrypted-media; picture-in-picture"
+                            loading="eager"
                         ></iframe>
                     <?php elseif ($is_iframe_source): ?>
                         <iframe
@@ -1831,6 +2103,38 @@ if ($channel) {
             </div>
         </div>
         
+        <!-- Try Another Source Section -->
+        <?php
+        // Get all active sources for "Try Another Source" links
+        $active_sources_list = [];
+        if (!empty($sources)) {
+            $active_sources_list = array_filter($sources, function($s) {
+                return ($s['isActive'] ?? true) && ($s['isVisible'] ?? true);
+            });
+            $active_sources_list = array_values($active_sources_list);
+        }
+        ?>
+        <?php if (count($active_sources_list) > 1): ?>
+            <div class="try-another-source-section">
+                <p class="try-another-source-text">If stream not playing video, Try Another Source:</p>
+                <div class="try-another-source-links">
+                    <?php foreach ($active_sources_list as $idx => $source_item): ?>
+                        <?php
+                            $source_num = $idx + 1;
+                            $is_current = ($idx === $current_source_index);
+                            $source_url = BASE_URL . '/watch-live-tv/' . (!empty($channel['slug']) ? htmlspecialchars($channel['slug']) : 'channel?id=' . $channel['id']);
+                            $source_url .= '?source=' . $idx;
+                        ?>
+                        <?php if (!$is_current): ?>
+                            <a href="<?php echo htmlspecialchars($source_url); ?>" class="try-source-link">
+                                Source <?php echo $source_num; ?>
+                            </a>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+        
         <!-- Error Banner -->
         <div id="error-banner" class="error-banner" style="display: none;">
             <div class="error-banner-content">
@@ -1853,6 +2157,116 @@ if ($channel) {
             <div class="channel-description-section">
                 <h3>About</h3>
                 <p><?php echo htmlspecialchars($channel['description']); ?></p>
+            </div>
+        <?php endif; ?>
+
+        <!-- Suggested Channels Section -->
+        <?php
+        // Get suggested channels from the same category (excluding current channel)
+        $suggested_channels = [];
+        if ($channel && !empty($channel['category'])) {
+            $current_channel_id = $channel['id'];
+            $current_category = $channel['category'];
+            
+            // Query channels from same category, excluding current channel
+            $suggest_query = "SELECT id, name, slug, logo, category, country, is_premium 
+                             FROM live_tv_channels 
+                             WHERE is_active = 1 
+                             AND category = ? 
+                             AND id != ? 
+                             AND (sources IS NOT NULL AND sources != '' AND sources != '[]' AND sources != 'null')
+                             AND (sources LIKE '%\"url\"%' OR stream_url IS NOT NULL AND stream_url != '')
+                             ORDER BY RAND() 
+                             LIMIT 8";
+            
+            $suggest_stmt = $conn->prepare($suggest_query);
+            if ($suggest_stmt) {
+                $suggest_stmt->bind_param("si", $current_category, $current_channel_id);
+                $suggest_stmt->execute();
+                $suggest_result = $suggest_stmt->get_result();
+                $suggested_channels = $suggest_result->fetch_all(MYSQLI_ASSOC);
+            }
+            
+            // If not enough channels from same category, fill with random channels
+            if (count($suggested_channels) < 6) {
+                $additional_query = "SELECT id, name, slug, logo, category, country, is_premium 
+                                     FROM live_tv_channels 
+                                     WHERE is_active = 1 
+                                     AND id != ? 
+                                     AND category != ?
+                                     AND (sources IS NOT NULL AND sources != '' AND sources != '[]' AND sources != 'null')
+                                     AND (sources LIKE '%\"url\"%' OR stream_url IS NOT NULL AND stream_url != '')
+                                     ORDER BY RAND() 
+                                     LIMIT ?";
+                
+                $needed = 8 - count($suggested_channels);
+                $additional_stmt = $conn->prepare($additional_query);
+                if ($additional_stmt) {
+                    $additional_stmt->bind_param("isi", $current_channel_id, $current_category, $needed);
+                    $additional_stmt->execute();
+                    $additional_result = $additional_stmt->get_result();
+                    $additional_channels = $additional_result->fetch_all(MYSQLI_ASSOC);
+                    $suggested_channels = array_merge($suggested_channels, $additional_channels);
+                }
+            }
+            
+            // Shuffle to randomize order
+            shuffle($suggested_channels);
+            // Limit to 8 channels
+            $suggested_channels = array_slice($suggested_channels, 0, 8);
+        }
+        ?>
+        
+        <?php if (!empty($suggested_channels)): ?>
+            <div class="suggested-channels-section">
+                <h3 class="suggested-channels-title">Watch other channels you might like</h3>
+                <div class="suggested-channels-grid">
+                    <?php foreach ($suggested_channels as $suggested_channel): ?>
+                        <?php
+                            // Construct URL: use /watch-live-tv/{slug} if slug exists, otherwise use /tv/tv-channel.php?id={id}
+                            if (!empty($suggested_channel['slug'])) {
+                                $suggested_url = BASE_URL . '/watch-live-tv/' . htmlspecialchars($suggested_channel['slug']);
+                            } else {
+                                $suggested_url = BASE_URL . '/tv/tv-channel.php?id=' . intval($suggested_channel['id']);
+                            }
+                            $is_premium = (($suggested_channel['is_premium'] ?? 0) == 1);
+                        ?>
+                        <a href="<?php echo htmlspecialchars($suggested_url); ?>" 
+                           class="suggested-channel-card <?php echo $is_premium ? 'premium' : 'free'; ?>">
+                            <div class="suggested-channel-logo">
+                                <?php if (!empty($suggested_channel['logo'])): ?>
+                                    <img src="<?php echo htmlspecialchars($suggested_channel['logo']); ?>" 
+                                         alt="<?php echo htmlspecialchars($suggested_channel['name']); ?>" 
+                                         onerror="this.style.display='none'">
+                                <?php else: ?>
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">
+                                        <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
+                                        <polyline points="17 2 12 7 7 2"></polyline>
+                                    </svg>
+                                <?php endif; ?>
+                                <div class="suggested-channel-overlay">
+                                    <div class="suggested-channel-play-icon">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="suggested-channel-badge">LIVE</div>
+                            </div>
+                            <div class="suggested-channel-info">
+                                <h4 class="suggested-channel-name"><?php echo htmlspecialchars($suggested_channel['name']); ?></h4>
+                                <div class="suggested-channel-meta">
+                                    <?php if (!empty($suggested_channel['category'])): ?>
+                                        <span class="suggested-channel-category"><?php echo htmlspecialchars($suggested_channel['category']); ?></span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($suggested_channel['country'])): ?>
+                                        <span class="suggested-channel-country"><?php echo htmlspecialchars($suggested_channel['country']); ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
             </div>
         <?php endif; ?>
     </div>
@@ -3014,6 +3428,7 @@ if ($channel) {
                         embedFrame.style.height = '100%';
                         embedFrame.style.border = '0';
                         embedFrame.setAttribute('allowfullscreen', '');
+                        embedFrame.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
                         htmlEmbedContainer.innerHTML = '';
                         htmlEmbedContainer.appendChild(embedFrame);
                     }
@@ -3173,14 +3588,19 @@ if ($channel) {
                     streamLoaded = true;
                     isLoadingStream = false;
                     
+                    // Ensure video is muted for autoplay (browser requirement)
+                    video.muted = true;
+                    
                     const playPromise = video.play();
                     if (playPromise !== undefined) {
                         playPromise.then(() => {
                             console.log('[TV Channel] HLS video is playing');
                             hideLoadingOverlay(); // Hide loading overlay when video starts playing
-                            if (video.muted) {
+                            // Unmute after playback starts (autoplay policy allows muted autoplay)
+                            setTimeout(() => {
                                 video.muted = false;
-                            }
+                                console.log('[TV Channel] HLS video unmuted');
+                            }, 500);
                         }).catch(e => {
                             console.error('[TV Channel] Error playing HLS video:', e);
                             if (e.name === 'NotAllowedError') {
@@ -3191,6 +3611,7 @@ if ($channel) {
                                     hideLoadingOverlay(); // Hide loading overlay when video starts playing
                                     setTimeout(() => {
                                         video.muted = false;
+                                        console.log('[TV Channel] HLS video unmuted after muted autoplay');
                                     }, 1000);
                                 }).catch(e2 => {
                                     console.error('[TV Channel] Muted autoplay for HLS also blocked:', e2);
@@ -3248,14 +3669,19 @@ if ($channel) {
                 streamLoaded = true;
                 isLoadingStream = false;
                 
+                // Ensure video is muted for autoplay (browser requirement)
+                video.muted = true;
+                
                 const playPromise = video.play();
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
                         console.log('[TV Channel] DASH video is playing');
                         hideLoadingOverlay(); // Hide loading overlay when video starts playing
-                        if (video.muted) {
+                        // Unmute after playback starts (autoplay policy allows muted autoplay)
+                        setTimeout(() => {
                             video.muted = false;
-                        }
+                            console.log('[TV Channel] DASH video unmuted');
+                        }, 500);
                     }).catch(e => {
                         console.error('[TV Channel] Error playing DASH video:', e);
                         if (e.name === 'NotAllowedError') {
@@ -3266,6 +3692,7 @@ if ($channel) {
                                 hideLoadingOverlay(); // Hide loading overlay when video starts playing
                                 setTimeout(() => {
                                     video.muted = false;
+                                    console.log('[TV Channel] DASH video unmuted after muted autoplay');
                                 }, 1000);
                             }).catch(e2 => {
                                 console.error('[TV Channel] Muted autoplay for DASH also blocked:', e2);
@@ -3303,15 +3730,20 @@ if ($channel) {
                 streamLoaded = true;
                 isLoadingStream = false;
                 
+                // Ensure video is muted for autoplay (browser requirement)
+                video.muted = true;
+                
                 // Ensure video plays after loading
                 const playPromise = video.play();
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
                         console.log('[TV Channel] Video is playing (native)');
                         hideLoadingOverlay(); // Hide loading overlay when video starts playing
-                        if (video.muted) {
+                        // Unmute after playback starts (autoplay policy allows muted autoplay)
+                        setTimeout(() => {
                             video.muted = false;
-                        }
+                            console.log('[TV Channel] Native video unmuted');
+                        }, 500);
                     }).catch(e => {
                         console.error('[TV Channel] Error playing video (native):', e);
                         if (e.name === 'NotAllowedError') {
@@ -3625,6 +4057,8 @@ if ($channel) {
                             embedFrame.style.height = '100%';
                             embedFrame.style.border = '0';
                             embedFrame.setAttribute('allowfullscreen', '');
+                            embedFrame.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+                            embedFrame.setAttribute('loading', 'eager');
                             htmlEmbedContainer.innerHTML = '';
                             htmlEmbedContainer.appendChild(embedFrame);
                         }
@@ -3632,6 +4066,7 @@ if ($channel) {
                         // Update currentSourceIndex for embedHtmlSources array
                         currentSourceIndex = newIndex;
                         
+                        // Build query parameters properly for Firefox compatibility
                         const params = new URLSearchParams();
                         if (channelSlug) {
                             params.set('slug', channelSlug);
@@ -3640,10 +4075,39 @@ if ($channel) {
                         }
                         params.set('source', isNaN(newIndex) ? 0 : newIndex);
                         
-                        const embedUrl = BASE_URL_JS + '/embed-source.php?' + params.toString();
+                        // Use BASE_URL_JS directly (not normalized) for embed-source.php since it's in root
+                        // Ensure absolute URL for Android/Firefox compatibility
+                        let embedUrl = BASE_URL_JS + '/embed-source.php?' + params.toString();
+                        
+                        // Ensure protocol is included (Android browsers are strict about this)
+                        if (!embedUrl.match(/^https?:\/\//)) {
+                            const protocol = window.location.protocol;
+                            embedUrl = protocol + '//' + embedUrl.replace(/^\/\//, '');
+                        }
+                        
+                        // Firefox on Android requires proper URL encoding - ensure it's a valid URL
+                        try {
+                            const testUrl = new URL(embedUrl); // Validate URL
+                            embedUrl = testUrl.href; // Use the normalized URL from URL object
+                        } catch (e) {
+                            console.error('[TV Channel] Invalid embed URL:', embedUrl, e);
+                            // Fallback: construct from current location
+                            const currentUrl = new URL(window.location.href);
+                            embedUrl = currentUrl.origin + '/embed-source.php?' + params.toString();
+                        }
+                        
                         console.log('[TV Channel] Switching to HTML embed source via iframe:', embedUrl);
                         
+                        // Firefox on Android: Set src using setAttribute for better compatibility
+                        embedFrame.setAttribute('src', embedUrl);
+                        
+                        // Also set .src property as fallback
                         embedFrame.src = embedUrl;
+                        
+                        // Add error handler for debugging
+                        embedFrame.onerror = function() {
+                            console.error('[TV Channel] Iframe load error for:', embedUrl);
+                        };
                         
                         htmlEmbedContainer.style.display = 'block';
                         if (video) video.style.display = 'none';
