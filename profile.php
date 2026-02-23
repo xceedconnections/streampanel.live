@@ -402,7 +402,7 @@ include 'includes/header.php';
     transform: scale(1.05);
 }
 .live-tv-channel-logo {
-    aspect-ratio: 16/9;
+    height: 110px;
     background: linear-gradient(to bottom right, rgba(229,9,20,0.2), rgba(37,99,235,0.2));
     display: flex;
     align-items: center;
@@ -410,10 +410,12 @@ include 'includes/header.php';
     position: relative;
 }
 .live-tv-channel-logo img {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
     object-fit: contain;
-    padding: 1rem;
+    padding: 0.5rem;
 }
 .live-tv-channel-overlay {
     position: absolute;
@@ -755,9 +757,9 @@ include 'includes/header.php';
                                 $tv_show_stmt->execute();
                                 $tv_show_result = $tv_show_stmt->get_result()->fetch_assoc();
                                 if (!empty($tv_show_result['slug'])) {
-                                    echo 'tv-show-detail.php?slug=' . htmlspecialchars($tv_show_result['slug']);
+                                    echo BASE_URL . '/tv-show/' . htmlspecialchars($tv_show_result['slug']);
                                 } else {
-                                    echo 'tv-show-detail.php?id=' . $tv_show_id;
+                                    echo BASE_URL . '/tv-show-detail?id=' . $tv_show_id;
                                 }
                             } else {
                                 echo '#';

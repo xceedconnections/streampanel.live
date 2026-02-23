@@ -22,6 +22,13 @@ $total_views = $total_movie_views + $total_tv_views + $total_channel_views;
 // Get concurrent live viewers
 $total_concurrent_viewers = getTotalConcurrentViewers($conn);
 $concurrent_viewers_by_channel = getConcurrentViewersByChannel($conn);
+
+// Get concurrent episode viewers
+$total_concurrent_episode_viewers = getTotalConcurrentEpisodeViewers($conn);
+$concurrent_viewers_by_episode = getConcurrentViewersByEpisode($conn);
+
+// Total concurrent viewers (channels + episodes)
+$total_all_concurrent_viewers = $total_concurrent_viewers + $total_concurrent_episode_viewers;
 ?>
 <div class="mb-8">
     <h1 class="text-4xl font-bold mb-2">Reports & Analytics</h1>
@@ -47,8 +54,8 @@ $concurrent_viewers_by_channel = getConcurrentViewersByChannel($conn);
     </div>
     <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 border-2 border-green-500">
         <p class="text-gray-400 text-sm mb-1">Live Viewers Now</p>
-        <p class="text-3xl font-bold text-green-400"><?php echo number_format($total_concurrent_viewers); ?></p>
-        <p class="text-xs text-gray-500 mt-1">Real-time concurrent</p>
+        <p class="text-3xl font-bold text-green-400"><?php echo number_format($total_all_concurrent_viewers); ?></p>
+        <p class="text-xs text-gray-500 mt-1">Real-time concurrent (TV + Episodes)</p>
     </div>
 </div>
 
@@ -100,49 +107,103 @@ $concurrent_viewers_by_channel = getConcurrentViewersByChannel($conn);
 </div>
 
 <!-- Concurrent Live Viewers Section -->
-<div class="bg-gray-900 rounded-lg p-6 mt-8">
-    <div class="flex items-center justify-between mb-4">
-        <h3 class="text-xl font-bold">Live Viewers (Real-time)</h3>
-        <button onclick="refreshLiveViewers()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm">
-            <i class="fas fa-sync-alt mr-2"></i>Refresh
-        </button>
-    </div>
-    <div id="live-viewers-container">
-        <?php if (empty($concurrent_viewers_by_channel)): ?>
-        <p class="text-gray-400 text-center py-8">No active viewers at the moment</p>
-        <?php else: ?>
-        <div class="overflow-x-auto">
-            <table class="w-full">
-                <thead>
-                    <tr class="border-b border-gray-800">
-                        <th class="text-left p-3">Channel</th>
-                        <th class="text-left p-3">Concurrent Viewers</th>
-                        <th class="text-left p-3">Total Views</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($concurrent_viewers_by_channel as $viewer_data): ?>
-                    <?php 
-                    $channel_info = $conn->query("SELECT name, views FROM live_tv_channels WHERE id = " . intval($viewer_data['channel_id']))->fetch_assoc();
-                    ?>
-                    <tr class="border-b border-gray-800 hover:bg-gray-800">
-                        <td class="p-3">
-                            <div class="font-semibold"><?php echo htmlspecialchars($viewer_data['channel_name'] ?? 'Unknown Channel'); ?></div>
-                        </td>
-                        <td class="p-3">
-                            <span class="px-3 py-1 bg-green-900 text-green-200 rounded-full font-bold">
-                                <i class="fas fa-eye mr-1"></i><?php echo number_format($viewer_data['concurrent_viewers']); ?>
-                            </span>
-                        </td>
-                        <td class="p-3 text-gray-400">
-                            <?php echo number_format($channel_info['views'] ?? 0); ?>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+    <!-- TV Channels Viewers -->
+    <div class="bg-gray-900 rounded-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold">Live TV Viewers (Real-time)</h3>
+            <button onclick="refreshLiveViewers()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm">
+                <i class="fas fa-sync-alt mr-2"></i>Refresh
+            </button>
         </div>
-        <?php endif; ?>
+        <div id="live-viewers-container">
+            <?php if (empty($concurrent_viewers_by_channel)): ?>
+            <p class="text-gray-400 text-center py-8">No active TV channel viewers at the moment</p>
+            <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-gray-800">
+                            <th class="text-left p-3">Channel</th>
+                            <th class="text-left p-3">Concurrent Viewers</th>
+                            <th class="text-left p-3">Total Views</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($concurrent_viewers_by_channel as $viewer_data): ?>
+                        <?php 
+                        $channel_info = $conn->query("SELECT name, views FROM live_tv_channels WHERE id = " . intval($viewer_data['channel_id']))->fetch_assoc();
+                        ?>
+                        <tr class="border-b border-gray-800 hover:bg-gray-800">
+                            <td class="p-3">
+                                <div class="font-semibold"><?php echo htmlspecialchars($viewer_data['channel_name'] ?? 'Unknown Channel'); ?></div>
+                            </td>
+                            <td class="p-3">
+                                <span class="px-3 py-1 bg-green-900 text-green-200 rounded-full font-bold">
+                                    <i class="fas fa-eye mr-1"></i><?php echo number_format($viewer_data['concurrent_viewers']); ?>
+                                </span>
+                            </td>
+                            <td class="p-3 text-gray-400">
+                                <?php echo number_format($channel_info['views'] ?? 0); ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    
+    <!-- TV Episodes Viewers -->
+    <div class="bg-gray-900 rounded-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold">TV Episode Viewers (Real-time)</h3>
+            <button onclick="refreshEpisodeViewers()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm">
+                <i class="fas fa-sync-alt mr-2"></i>Refresh
+            </button>
+        </div>
+        <div id="episode-viewers-container">
+            <?php if (empty($concurrent_viewers_by_episode)): ?>
+            <p class="text-gray-400 text-center py-8">No active episode viewers at the moment</p>
+            <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-gray-800">
+                            <th class="text-left p-3">Episode</th>
+                            <th class="text-left p-3">Concurrent Viewers</th>
+                            <th class="text-left p-3">Total Views</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($concurrent_viewers_by_episode as $viewer_data): ?>
+                        <?php 
+                        $episode_info = $conn->query("SELECT views FROM tv_episodes WHERE id = " . intval($viewer_data['episode_id']))->fetch_assoc();
+                        $episode_display = htmlspecialchars($viewer_data['show_title'] ?? 'TV Show') . ' - S' . $viewer_data['season_number'] . 'E' . $viewer_data['episode_number'];
+                        if (!empty($viewer_data['episode_title'])) {
+                            $episode_display .= ': ' . htmlspecialchars($viewer_data['episode_title']);
+                        }
+                        ?>
+                        <tr class="border-b border-gray-800 hover:bg-gray-800">
+                            <td class="p-3">
+                                <div class="font-semibold text-sm"><?php echo $episode_display; ?></div>
+                            </td>
+                            <td class="p-3">
+                                <span class="px-3 py-1 bg-green-900 text-green-200 rounded-full font-bold">
+                                    <i class="fas fa-eye mr-1"></i><?php echo number_format($viewer_data['concurrent_viewers']); ?>
+                                </span>
+                            </td>
+                            <td class="p-3 text-gray-400">
+                                <?php echo number_format($episode_info['views'] ?? 0); ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
 
@@ -157,10 +218,20 @@ function refreshLiveViewers() {
     }, 500);
 }
 
+function refreshEpisodeViewers() {
+    const container = document.getElementById('episode-viewers-container');
+    container.innerHTML = '<p class="text-gray-400 text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Refreshing...</p>';
+    
+    // Reload the page to refresh data
+    setTimeout(() => {
+        window.location.reload();
+    }, 500);
+}
+
 // Auto-refresh every 10 seconds
 setInterval(function() {
-    const refreshBtn = document.querySelector('[onclick="refreshLiveViewers()"]');
-    if (refreshBtn && document.visibilityState === 'visible') {
+    if (document.visibilityState === 'visible') {
+        // Refresh both sections
         refreshLiveViewers();
     }
 }, 10000);

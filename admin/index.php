@@ -1228,6 +1228,8 @@ $stats = getAdminStats($conn);
         }
         
         if (file_exists($tabFile)) {
+            // Set flag to indicate this file is being loaded as a tab
+            define('ADMIN_TAB_LOAD', true);
             require $tabFile;
         } else {
             echo '<div class="bg-red-900 bg-opacity-50 border border-red-700 text-red-200 px-4 py-3 rounded mb-4">';

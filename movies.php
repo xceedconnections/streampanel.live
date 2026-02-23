@@ -21,6 +21,40 @@ if (!isSectionEnabled($conn, 'movies')) {
     <?php include 'includes/footer.php'; ?>
     <?php exit(); }
 
+// Check if login is required for Movies
+// Use prepared statement to safely query the database
+$login_required_movies = '0'; // Default to '0' (login NOT required)
+try {
+    $stmt = $conn->prepare("SELECT setting_value FROM settings WHERE setting_key = ? LIMIT 1");
+    if ($stmt) {
+        $key = 'login_required_movies';
+        $stmt->bind_param("s", $key);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            $login_required_movies = $row['setting_value'] ?? '0';
+        }
+        $stmt->close();
+    }
+} catch (Exception $e) {
+    // On error, default to '0' (login NOT required)
+    error_log("[Movies] Error reading login_required_movies: " . $e->getMessage());
+    $login_required_movies = '0';
+}
+
+// Normalize the value - ensure it's a string and trim whitespace
+$login_required_movies = trim((string)$login_required_movies);
+
+// Only require login if value is exactly '1'
+// Any other value (including empty, null, '0', 'false', etc.) means login NOT required
+$login_required = ($login_required_movies === '1');
+
+// Require login ONLY if explicitly set to '1'
+if ($login_required === true) {
+    requireLogin();
+}
+
 // Get filter parameters
 $category = $_GET['category'] ?? '';
 $search = $_GET['search'] ?? '';

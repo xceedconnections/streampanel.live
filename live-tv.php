@@ -102,25 +102,7 @@ $all_countries = $conn->query("SELECT DISTINCT country FROM live_tv_channels WHE
 
 // Filter out channels with no valid sources
 $channels = array_filter($channels, function($channel) {
-    $sources = json_decode($channel['sources'] ?? '[]', true);
-    $has_sources = false;
-    
-    if (is_array($sources) && !empty($sources)) {
-        // Check if any source has a URL
-        foreach ($sources as $source) {
-            if (!empty($source['url'])) {
-                $has_sources = true;
-                break;
-            }
-        }
-    }
-    
-    // Fallback to stream_url if no sources
-    if (!$has_sources && !empty($channel['stream_url'])) {
-        $has_sources = true;
-    }
-    
-    return $has_sources;
+    return countActiveSources($channel) > 0;
 });
 
 // Group by category (only if not viewing a specific category)
@@ -204,7 +186,7 @@ include 'includes/header.php';
 }
 @media (min-width: 1280px) {
     .live-tv-channels-grid {
-        grid-template-columns: repeat(6, 1fr);
+        grid-template-columns: repeat(5, 1fr);
     }
 }
 .live-tv-channel-card {
@@ -227,7 +209,7 @@ include 'includes/header.php';
     transform: scale(1.05);
 }
 .live-tv-channel-logo {
-    aspect-ratio: 16/9;
+    height: 110px;
     background: linear-gradient(to bottom right, rgba(229,9,20,0.2), rgba(37,99,235,0.2));
     display: flex;
     align-items: center;
@@ -235,10 +217,12 @@ include 'includes/header.php';
     position: relative;
 }
 .live-tv-channel-logo img {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
     object-fit: contain;
-    padding: 1rem;
+    padding: 0.5rem;
 }
 .live-tv-channel-overlay {
     position: absolute;
@@ -320,6 +304,19 @@ include 'includes/header.php';
 }
 .live-tv-channel-meta span {
     white-space: nowrap;
+}
+.live-tv-channel-source-count {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    color: #9ca3af;
+    margin-top: 0.25rem;
+}
+.live-tv-channel-source-count svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
 }
 
 /* Category Filter Scroll Container */
@@ -492,11 +489,24 @@ include 'includes/header.php';
                     <div class="live-tv-channel-meta">
                         <?php if (!empty($channel['category'])): ?>
                         <span><?php echo htmlspecialchars($channel['category']); ?></span>
-                        <?php endif; ?>|
+                        <?php endif; ?>
+                        <?php if (!empty($channel['category']) && !empty($channel['country'])): ?>|<?php endif; ?>
                         <?php if (!empty($channel['country'])): ?>
                         <span><?php echo htmlspecialchars($channel['country']); ?></span>
                         <?php endif; ?>
                     </div>
+                    <?php
+                    $source_count = countActiveSources($channel);
+                    if ($source_count > 0):
+                    ?>
+                    <div class="live-tv-channel-source-count">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
+                            <polyline points="17 2 12 7 7 2"></polyline>
+                        </svg>
+                        <span><?php echo $source_count; ?> source<?php echo $source_count > 1 ? 's' : ''; ?></span>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </a>
             <?php endforeach; ?>
@@ -613,11 +623,24 @@ include 'includes/header.php';
                             <div class="live-tv-channel-meta">
                                 <?php if (!empty($channel['category'])): ?>
                                 <span><?php echo htmlspecialchars($channel['category']); ?></span>
-                                <?php endif; ?>|
+                                <?php endif; ?>
+                                <?php if (!empty($channel['category']) && !empty($channel['country'])): ?>|<?php endif; ?>
                                 <?php if (!empty($channel['country'])): ?>
                                 <span><?php echo htmlspecialchars($channel['country']); ?></span>
                                 <?php endif; ?>
                             </div>
+                            <?php
+                            $source_count = countActiveSources($channel);
+                            if ($source_count > 0):
+                            ?>
+                            <div class="live-tv-channel-source-count">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
+                                    <polyline points="17 2 12 7 7 2"></polyline>
+                                </svg>
+                                <span><?php echo $source_count; ?> source<?php echo $source_count > 1 ? 's' : ''; ?></span>
+                            </div>
+                            <?php endif; ?>
                         </div>
                     </a>
                 <?php endforeach; ?>

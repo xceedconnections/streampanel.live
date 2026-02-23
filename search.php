@@ -37,6 +37,66 @@ if (empty($login_required_tv_channels) || $login_required_tv_channels === '0' ||
     $tv_login_required = false;
 }
 
+// Check if login is required for TV Shows
+$login_required_tv_shows = '0'; // Default to '0' (login NOT required)
+try {
+    $setting_result = getSetting($conn, 'login_required_tv_shows', '0');
+    if ($setting_result !== false && $setting_result !== null) {
+        $login_required_tv_shows = $setting_result;
+    } else {
+        $direct_query = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'login_required_tv_shows' LIMIT 1");
+        if ($direct_query && $direct_query->num_rows > 0) {
+            $row = $direct_query->fetch_assoc();
+            $login_required_tv_shows = $row['setting_value'] ?? '0';
+        }
+    }
+} catch (Exception $e) {
+    $login_required_tv_shows = '0';
+}
+
+// Check if login is actually required for TV Shows
+$tv_shows_login_required = false;
+if (is_string($login_required_tv_shows)) {
+    $login_required_tv_shows = trim($login_required_tv_shows);
+    $tv_shows_login_required = ($login_required_tv_shows === '1' || $login_required_tv_shows === 'true' || $login_required_tv_shows === 'yes');
+} else {
+    $tv_shows_login_required = ($login_required_tv_shows === 1 || $login_required_tv_shows === true);
+}
+
+if (empty($login_required_tv_shows) || $login_required_tv_shows === '0' || $login_required_tv_shows === 0 || $login_required_tv_shows === false || $login_required_tv_shows === null) {
+    $tv_shows_login_required = false;
+}
+
+// Check if login is required for Movies
+$login_required_movies = '0'; // Default to '0' (login NOT required)
+try {
+    $setting_result = getSetting($conn, 'login_required_movies', '0');
+    if ($setting_result !== false && $setting_result !== null) {
+        $login_required_movies = $setting_result;
+    } else {
+        $direct_query = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'login_required_movies' LIMIT 1");
+        if ($direct_query && $direct_query->num_rows > 0) {
+            $row = $direct_query->fetch_assoc();
+            $login_required_movies = $row['setting_value'] ?? '0';
+        }
+    }
+} catch (Exception $e) {
+    $login_required_movies = '0';
+}
+
+// Check if login is actually required for Movies
+$movies_login_required = false;
+if (is_string($login_required_movies)) {
+    $login_required_movies = trim($login_required_movies);
+    $movies_login_required = ($login_required_movies === '1' || $login_required_movies === 'true' || $login_required_movies === 'yes');
+} else {
+    $movies_login_required = ($login_required_movies === 1 || $login_required_movies === true);
+}
+
+if (empty($login_required_movies) || $login_required_movies === '0' || $login_required_movies === 0 || $login_required_movies === false || $login_required_movies === null) {
+    $movies_login_required = false;
+}
+
 $search_query = $_GET['q'] ?? '';
 $type_filter = $_GET['type'] ?? '';
 $category_filter = $_GET['category'] ?? '';
@@ -147,24 +207,22 @@ if (!empty($search_query)) {
         
         // Filter out channels with no valid sources
         $results['live_tv'] = array_filter($tv_results, function($channel) {
-            $sources = json_decode($channel['sources'] ?? '[]', true);
-            $has_sources = false;
-            
-            if (is_array($sources) && !empty($sources)) {
-                foreach ($sources as $source) {
-                    if (!empty($source['url'])) {
-                        $has_sources = true;
-                        break;
-                    }
-                }
-            }
-            
-            if (!$has_sources && !empty($channel['stream_url'])) {
-                $has_sources = true;
-            }
-            
-            return $has_sources;
+            return countActiveSources($channel) > 0;
         });
+    }
+}
+
+// Filter results based on login requirements
+// If login is required and user is not logged in, remove those results
+if (!isLoggedIn()) {
+    if ($movies_login_required) {
+        $results['movies'] = [];
+    }
+    if ($tv_shows_login_required) {
+        $results['tv_shows'] = [];
+    }
+    if ($tv_login_required) {
+        $results['live_tv'] = [];
     }
 }
 
@@ -248,6 +306,30 @@ include 'includes/header.php';
     height: 100%;
     object-fit: cover;
 }
+
+/* TV show results: use 16:9 and contain so banner-style thumbnails are not cropped */
+.search-result-poster-tv {
+    padding-top: 56.25%;
+}
+.search-result-poster-tv img {
+    object-fit: contain;
+    background: #000;
+}
+
+/* TV show grid: make cards a bit wider for better readability */
+.search-results-grid-tv {
+    grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 640px) {
+    .search-results-grid-tv {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+@media (min-width: 1024px) {
+    .search-results-grid-tv {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
 .search-result-info {
     padding: 0.75rem;
     background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
@@ -301,7 +383,7 @@ include 'includes/header.php';
 }
 @media (min-width: 1280px) {
     .live-tv-channels-grid {
-        grid-template-columns: repeat(6, 1fr);
+        grid-template-columns: repeat(5, 1fr);
     }
 }
 .live-tv-channel-card {
@@ -322,7 +404,7 @@ include 'includes/header.php';
     transform: scale(1.05);
 }
 .live-tv-channel-logo {
-    aspect-ratio: 16/9;
+    height: 110px;
     background: linear-gradient(to bottom right, rgba(229,9,20,0.2), rgba(37,99,235,0.2));
     display: flex;
     align-items: center;
@@ -330,10 +412,12 @@ include 'includes/header.php';
     position: relative;
 }
 .live-tv-channel-logo img {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
     object-fit: contain;
-    padding: 1rem;
+    padding: 0.5rem;
 }
 .live-tv-channel-overlay {
     position: absolute;
@@ -416,6 +500,19 @@ include 'includes/header.php';
 .live-tv-channel-meta span {
     white-space: nowrap;
 }
+.live-tv-channel-source-count {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    color: #9ca3af;
+    margin-top: 0.25rem;
+}
+.live-tv-channel-source-count svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+}
 </style>
 
 <div class="search-page animate-in fade-in">
@@ -472,8 +569,8 @@ include 'includes/header.php';
         </h2>
         <div class="search-results-grid">
             <?php foreach ($results['tv_shows'] as $show): ?>
-            <div class="search-result-card" onclick="checkLoginAndPlay('<?php echo BASE_URL; ?><?php echo !empty($show['slug']) ? '/tv-show/' . htmlspecialchars($show['slug']) : '/tv-show-detail.php?id=' . $show['id']; ?>')">
-                <div class="search-result-poster">
+            <div class="search-result-card search-result-card-tv" onclick="checkLoginAndPlay('<?php echo BASE_URL; ?><?php echo !empty($show['slug']) ? '/tv-show/' . htmlspecialchars($show['slug']) : '/tv-show-detail?id=' . $show['id']; ?>')">
+                <div class="search-result-poster search-result-poster-tv">
                     <img src="<?php echo htmlspecialchars($show['poster'] ?? $show['thumbnail'] ?? FALLBACK_POSTER); ?>" 
                          alt="<?php echo htmlspecialchars($show['title']); ?>"
                          onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
@@ -534,11 +631,24 @@ include 'includes/header.php';
                     <div class="live-tv-channel-meta">
                         <?php if (!empty($channel['category'])): ?>
                         <span><?php echo htmlspecialchars($channel['category']); ?></span>
-                        <?php endif; ?>|
+                        <?php endif; ?>
+                        <?php if (!empty($channel['category']) && !empty($channel['country'])): ?>|<?php endif; ?>
                         <?php if (!empty($channel['country'])): ?>
                         <span><?php echo htmlspecialchars($channel['country']); ?></span>
                         <?php endif; ?>
                     </div>
+                    <?php
+                    $source_count = countActiveSources($channel);
+                    if ($source_count > 0):
+                    ?>
+                    <div class="live-tv-channel-source-count">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
+                            <polyline points="17 2 12 7 7 2"></polyline>
+                        </svg>
+                        <span><?php echo $source_count; ?> source<?php echo $source_count > 1 ? 's' : ''; ?></span>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </a>
             <?php endforeach; ?>

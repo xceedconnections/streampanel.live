@@ -236,6 +236,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <?php if ($enable_live_tv): ?>
                     <a href="<?php echo BASE_URL; ?>/live-tv" class="hover:text-gray-300 <?php echo $current_page == 'live-tv.php' ? 'font-bold' : ''; ?>">Live TV</a>
                     <?php endif; ?>
+                    <a href="<?php echo BASE_URL; ?>/streampanel.apk" class="hover:text-gray-300 <?php echo $current_page == 'live-tv.php' ? 'font-bold' : ''; ?>">Download APK</a>
+
                 </div>
             </div>
             <div class="flex items-center space-x-4">
@@ -247,12 +249,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <a href="<?php echo BASE_URL; ?>/profile" class="hover:text-gray-300">
                         <i class="fas fa-user-circle text-2xl"></i>
                     </a>
-                    <a href="logout.php" class="bg-netflix-red px-4 py-2 rounded hover:bg-red-700">Logout</a>
+                    <a href="<?php echo BASE_URL; ?>/logout" class="bg-netflix-red px-4 py-2 rounded hover:bg-red-700">Logout</a>
                 <?php elseif (isAdminLoggedIn()): ?>
-                    <a href="admin/dashboard.php" class="hover:text-gray-300">Admin Panel</a>
-                    <a href="admin/logout.php" class="bg-netflix-red px-4 py-2 rounded hover:bg-red-700">Logout</a>
+                    <a href="<?php echo BASE_URL; ?>/admin/dashboard.php" class="hover:text-gray-300">Admin Panel</a>
+                    <a href="<?php echo BASE_URL; ?>/admin/logout.php" class="bg-netflix-red px-4 py-2 rounded hover:bg-red-700">Logout</a>
                 <?php else: ?>
-                    <a href="login.php" class="hover:text-gray-300">Sign In</a>
+                    <a href="<?php echo BASE_URL; ?>/login" class="hover:text-gray-300">Sign In</a>
                 <?php endif; ?>
             </div>
         </div>
@@ -289,20 +291,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
                         ?>
                         <option value="<?php echo htmlspecialchars($cat['slug']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
                         <?php endforeach; ?>
-                    </select>
-                    <select name="country" class="bg-gray-900 border border-gray-700 rounded px-4 py-2 text-white">
-                        <option value="">All Countries</option>
-                        <?php
-                        $countries_result = $conn->query("SELECT DISTINCT country FROM live_tv_channels WHERE country IS NOT NULL AND country != '' ORDER BY country ASC");
-                        if ($countries_result) {
-                            $countries = $countries_result->fetch_all(MYSQLI_ASSOC);
-                            foreach ($countries as $country):
-                        ?>
-                        <option value="<?php echo htmlspecialchars($country['country']); ?>"><?php echo htmlspecialchars($country['country']); ?></option>
-                        <?php 
-                            endforeach;
-                        }
-                        ?>
                     </select>
                 </div>
             </form>

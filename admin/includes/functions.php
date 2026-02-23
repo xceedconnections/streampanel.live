@@ -62,6 +62,60 @@ function encodeSources($sources) {
     return json_encode($sources, JSON_UNESCAPED_SLASHES);
 }
 
+// Count active sources for a channel
+function countActiveSources($channel) {
+    $sources = parseSources($channel['sources'] ?? '[]');
+    $count = 0;
+    
+    if (is_array($sources) && !empty($sources)) {
+        foreach ($sources as $source) {
+            // Skip if source is not an array
+            if (!is_array($source)) {
+                continue;
+            }
+            
+            // Check if source is active - default to true if not set, but explicitly check for false values
+            $isActive = true;
+            if (isset($source['isActive'])) {
+                $isActiveValue = $source['isActive'];
+                // Handle boolean false, string "false", 0, "0", etc.
+                if ($isActiveValue === false || $isActiveValue === 0 || $isActiveValue === '0' || 
+                    (is_string($isActiveValue) && strtolower($isActiveValue) === 'false')) {
+                    $isActive = false;
+                } else {
+                    $isActive = (bool)$isActiveValue;
+                }
+            }
+            
+            // Check if source is visible - default to true if not set, but explicitly check for false values
+            $isVisible = true;
+            if (isset($source['isVisible'])) {
+                $isVisibleValue = $source['isVisible'];
+                // Handle boolean false, string "false", 0, "0", etc.
+                if ($isVisibleValue === false || $isVisibleValue === 0 || $isVisibleValue === '0' || 
+                    (is_string($isVisibleValue) && strtolower($isVisibleValue) === 'false')) {
+                    $isVisible = false;
+                } else {
+                    $isVisible = (bool)$isVisibleValue;
+                }
+            }
+            
+            // Check if source has a valid URL
+            $url = trim($source['url'] ?? '');
+            
+            // Only count if source is active, visible, and has a valid URL
+            if ($isActive && $isVisible && !empty($url) && strlen($url) > 3) {
+                $count++;
+            }
+        }
+    }
+    
+    // Do NOT fallback to stream_url - channels must have valid JSON sources
+    // This ensures we only show channels with properly configured sources
+    
+    return $count;
+}
+
 // Get sliders for a specific page
 function getSlidersForPage($conn, $page) {
     $page_field = '';
@@ -114,7 +168,7 @@ function getSlideLink($slide, $conn) {
         case 'tv_show':
             $tv_show = getTVShowById($conn, $slide['link_id']);
             if ($tv_show && !empty($tv_show['slug'])) {
-                return BASE_URL . '/tv-show-detail.php?slug=' . $tv_show['slug'];
+                return BASE_URL . '/tv-show/' . $tv_show['slug'];
             }
             return BASE_URL . '/tv-shows';
         case 'live_tv':
@@ -314,6 +368,68 @@ function getConcurrentViewersByChannel($conn) {
             FROM channel_viewers cv
             LEFT JOIN live_tv_channels ltc ON cv.channel_id = ltc.id
             GROUP BY cv.channel_id, ltc.name
+            ORDER BY concurrent_viewers DESC
+        ");
+        
+        $viewers = [];
+        while ($row = $result->fetch_assoc()) {
+            $viewers[] = $row;
+        }
+        return $viewers;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Get total concurrent episode viewers
+function getTotalConcurrentEpisodeViewers($conn) {
+    try {
+        // Clean up old viewers first
+        try {
+            $conn->query("DELETE FROM episode_viewers WHERE last_ping < DATE_SUB(NOW(), INTERVAL 30 SECOND)");
+        } catch (Exception $e) {
+            // Try with last_seen if last_ping doesn't exist
+            try {
+                $conn->query("DELETE FROM episode_viewers WHERE last_seen < DATE_SUB(NOW(), INTERVAL 30 SECOND)");
+            } catch (Exception $e2) {
+                // Table might not exist
+            }
+        }
+        
+        $result = $conn->query("SELECT COUNT(DISTINCT session_id) as total FROM episode_viewers");
+        return $result->fetch_assoc()['total'] ?? 0;
+    } catch (Exception $e) {
+        return 0;
+    }
+}
+
+// Get concurrent viewers by episode
+function getConcurrentViewersByEpisode($conn) {
+    try {
+        // Clean up old viewers first
+        try {
+            $conn->query("DELETE FROM episode_viewers WHERE last_ping < DATE_SUB(NOW(), INTERVAL 30 SECOND)");
+        } catch (Exception $e) {
+            // Try with last_seen if last_ping doesn't exist
+            try {
+                $conn->query("DELETE FROM episode_viewers WHERE last_seen < DATE_SUB(NOW(), INTERVAL 30 SECOND)");
+            } catch (Exception $e2) {
+                // Table might not exist
+            }
+        }
+        
+        $result = $conn->query("
+            SELECT 
+                ev.episode_id,
+                e.title as episode_title,
+                e.season_number,
+                e.episode_number,
+                t.title as show_title,
+                COUNT(DISTINCT ev.session_id) as concurrent_viewers
+            FROM episode_viewers ev
+            LEFT JOIN tv_episodes e ON ev.episode_id = e.id
+            LEFT JOIN tv_shows t ON e.tv_show_id = t.id
+            GROUP BY ev.episode_id, e.title, e.season_number, e.episode_number, t.title
             ORDER BY concurrent_viewers DESC
         ");
         

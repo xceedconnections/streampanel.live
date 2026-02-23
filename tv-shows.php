@@ -21,6 +21,9 @@ if (!isSectionEnabled($conn, 'tv_shows')) {
     <?php include 'includes/footer.php'; ?>
     <?php exit(); }
 
+// TV Shows listing page is always accessible without login (for SEO purposes)
+// Login requirement only applies to the watch page (episodes)
+
 // Get filter parameters
 $category = $_GET['category'] ?? '';
 $search = $_GET['search'] ?? '';
@@ -95,13 +98,8 @@ include 'includes/header.php';
 }
 @media (min-width: 768px) {
     .movie-grid {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         padding: 0 3rem;
-    }
-}
-@media (min-width: 1024px) {
-    .movie-grid {
-        grid-template-columns: repeat(5, 1fr);
     }
 }
 .movie-card-page {
@@ -145,6 +143,17 @@ include 'includes/header.php';
     text-overflow: ellipsis;
     width: 100%;
     color: #fff;
+}
+
+.movie-card-title-page {
+    margin-top: 0.35rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #e5e7eb;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .search-input {
     width: 100%;
@@ -216,7 +225,17 @@ include 'includes/header.php';
     <?php if (!empty($tv_shows)): ?>
     <div class="movie-grid">
         <?php foreach ($tv_shows as $show): ?>
-        <a href="<?php echo isLoggedIn() ? 'tv-show-detail.php?id=' . $show['id'] : 'login.php?redirect=' . urlencode('tv-show-detail.php?id=' . $show['id']); ?>" class="movie-card-page">
+        <?php
+        // Generate clean URL using slug if available, fallback to ID
+        $show_url = '';
+        if (!empty($show['slug'])) {
+            $show_url = BASE_URL . '/tv-show/' . htmlspecialchars($show['slug']);
+        } else {
+            $show_url = BASE_URL . '/tv-show-detail?id=' . $show['id'];
+        }
+        // No login redirect needed - listing page is always accessible
+        ?>
+        <a href="<?php echo $show_url; ?>" class="movie-card-page">
             <img src="<?php echo htmlspecialchars($show['poster'] ?? FALLBACK_POSTER); ?>" 
                  alt="<?php echo htmlspecialchars($show['title']); ?>" 
                  loading="lazy"
@@ -225,6 +244,9 @@ include 'includes/header.php';
                 <p><?php echo htmlspecialchars($show['title']); ?></p>
             </div>
         </a>
+        <div class="movie-card-title-page">
+            <?php echo htmlspecialchars($show['title']); ?>
+        </div>
         <?php endforeach; ?>
     </div>
     <?php else: ?>

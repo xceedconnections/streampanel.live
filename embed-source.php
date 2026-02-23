@@ -85,7 +85,8 @@ header('Content-Type: text/html; charset=utf-8');
 if (!empty($embedHtml)) {
     echo $embedHtml;
 } else {
-    echo 'No embed available for this source.';
+    // More user-friendly message if an embed was requested but none is configured
+    echo 'Channel not available for this source.';
 }
 ?>
 </body>

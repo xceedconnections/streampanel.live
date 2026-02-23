@@ -108,20 +108,19 @@ if (!$channel) {
     // Parse sources
     $sources = parseSources($channel['sources'] ?? '[]');
     
-    // Check if channel has any valid sources
+    // Check if channel has any valid sources (JSON `sources` only)
+    // We intentionally DO NOT treat plain `stream_url` as a valid source here.
+    // Channels without configured sources should be shown as "Channel Not Available".
     $has_valid_sources = false;
     if (!empty($sources)) {
         foreach ($sources as $source) {
-            if (!empty($source['url'])) {
+            // Check if source has a valid URL (not empty, not just whitespace)
+            $source_url = trim($source['url'] ?? '');
+            if (!empty($source_url) && strlen($source_url) > 3) {
                 $has_valid_sources = true;
                 break;
             }
         }
-    }
-    
-    // Check stream_url as fallback
-    if (!$has_valid_sources && !empty($channel['stream_url'])) {
-        $has_valid_sources = true;
     }
     
     // If no valid sources, show error message
@@ -158,14 +157,9 @@ if (!$channel) {
         }
     }
     
-    // Fallback to stream_url if no sources
-    if (!$selected_source && !empty($channel['stream_url'])) {
-        $selected_source = [
-            'url' => $channel['stream_url'],
-            'type' => 'html-embed',
-            'label' => 'Default Stream'
-        ];
-    }
+    // Note: we deliberately do NOT fall back to `stream_url` here.
+    // If there are no configured JSON sources, the channel should be treated
+    // as unavailable and the error page will be shown instead of a player.
     }
     } // End of isChannelActive check
     
@@ -1820,33 +1814,6 @@ if ($channel) {
                     </button>
                     <?php endif; ?>
                     
-                    <?php 
-                    $active_sources_mobile = array_filter($sources ?? [], function($s) { return ($s['isActive'] ?? true) && ($s['isVisible'] ?? true); });
-                    $active_sources_mobile = array_values($active_sources_mobile);
-                    ?>
-                    <?php if (!empty($active_sources_mobile) && !$showPremiumGate): ?>
-                    <select id="source-selector-mobile" class="source-selector-header" style="display: none;">
-                        <?php foreach ($active_sources_mobile as $index => $source): ?>
-                            <?php
-                                $sourceType = $source['type'] ?? 'html-embed';
-                                $sourceUrl  = $source['url'] ?? '';
-                                // For html-embed type, DO NOT put full HTML into data-url (we use iframe with embed-source.php instead)
-                                // For iframe type, we DO want the URL in data-url so JS can load it directly
-                                if (in_array($sourceType, ['html-embed'], true)) {
-                                    $dataUrl = '';
-                                } else {
-                                    $dataUrl = htmlspecialchars($sourceUrl, ENT_QUOTES, 'UTF-8');
-                                }
-                            ?>
-                            <option value="<?php echo $index; ?>" 
-                                    data-url="<?php echo $dataUrl; ?>"
-                                    data-type="<?php echo htmlspecialchars($sourceType); ?>"
-                                    <?php echo $selected_source && $selected_source['url'] === $sourceUrl ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($source['label'] ?? 'Source ' . ($index + 1)); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <?php endif; ?>
                     
                     <div class="viewer-count-header" id="viewer-count-mobile">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1888,33 +1855,6 @@ if ($channel) {
                         </button>
                         <?php endif; ?>
                         
-                        <?php 
-                        $active_sources_desktop = array_filter($sources ?? [], function($s) { return ($s['isActive'] ?? true) && ($s['isVisible'] ?? true); });
-                        $active_sources_desktop = array_values($active_sources_desktop);
-                        ?>
-                        <?php if (!empty($active_sources_desktop) && !$showPremiumGate): ?>
-                        <select id="source-selector-desktop" class="source-selector-header" style="display: none;">
-                            <?php foreach ($active_sources_desktop as $index => $source): ?>
-                                <?php
-                                    $sourceType = $source['type'] ?? 'html-embed';
-                                    $sourceUrl  = $source['url'] ?? '';
-                                    // For html-embed type, DO NOT put full HTML into data-url (we use iframe with embed-source.php instead)
-                                    // For iframe type, we DO want the URL in data-url so JS can load it directly
-                                    if (in_array($sourceType, ['html-embed'], true)) {
-                                        $dataUrl = '';
-                                    } else {
-                                        $dataUrl = htmlspecialchars($sourceUrl, ENT_QUOTES, 'UTF-8');
-                                    }
-                                ?>
-                                <option value="<?php echo $index; ?>" 
-                                        data-url="<?php echo $dataUrl; ?>"
-                                        data-type="<?php echo htmlspecialchars($sourceType); ?>"
-                                        <?php echo $selected_source && $selected_source['url'] === $sourceUrl ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($source['label'] ?? 'Source ' . ($index + 1)); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <?php endif; ?>
                         
                         <div class="viewer-count-header" id="viewer-count-desktop">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2003,6 +1943,7 @@ if ($channel) {
         <?php endif; ?>
 
         <!-- Player Container -->
+        <?php if (!$error && $has_valid_sources && !empty($selected_source)): ?>
         <div 
             id="player-container"
             class="<?php echo $isAndroidTV ? 'player-container-androidtv' : 'player-container player-container-mobile'; ?>"
@@ -2102,6 +2043,7 @@ if ($channel) {
                 </div>
             </div>
         </div>
+        <?php endif; ?>
         
         <!-- Try Another Source Section -->
         <?php
@@ -3977,222 +3919,6 @@ if ($channel) {
             });
         <?php endif; ?>
         
-        // Source selector change handler (for both mobile and desktop)
-        const sourceSelectorMobile = document.getElementById('source-selector-mobile');
-        const sourceSelectorDesktop = document.getElementById('source-selector-desktop');
-        
-        function handleSourceChange(selector) {
-            if (!selector) return;
-            
-            selector.addEventListener('change', function() {
-                const newIndex = parseInt(this.value, 10);
-                const selectedOption = this.options[this.selectedIndex];
-                const newType = selectedOption.dataset.type || 'html-embed';
-                
-                const htmlEmbedContainer = document.getElementById('html-embed-container');
-                let embedFrame = document.getElementById('embedFrame');
-                const video = document.getElementById('videoPlayer');
-                const youtubeIframe = document.getElementById('youtubePlayer');
-                
-                // For iframe type, load URL directly in iframe
-                if (newType === 'iframe') {
-                    // Try to get URL from data-url attribute first, then fall back to activeSources array
-                    let newUrl = selectedOption.dataset.url || '';
-                    if (!newUrl && typeof activeSources !== 'undefined' && activeSources[newIndex]) {
-                        newUrl = activeSources[newIndex].url || '';
-                        console.log('[TV Channel] Got URL from activeSources array:', newUrl);
-                    }
-                    
-                    if (newUrl && htmlEmbedContainer) {
-                        // Update currentSourceIndex
-                        currentSourceIndex = newIndex;
-                        
-                        // Use the embedFrame already declared at function scope, or create if needed
-                        if (!embedFrame) {
-                            embedFrame = document.createElement('iframe');
-                            embedFrame.id = 'embedFrame';
-                            embedFrame.style.width = '100%';
-                            embedFrame.style.height = '100%';
-                            embedFrame.style.border = '0';
-                            embedFrame.setAttribute('allowfullscreen', '');
-                            htmlEmbedContainer.innerHTML = '';
-                            htmlEmbedContainer.appendChild(embedFrame);
-                        }
-                        
-                        console.log('[TV Channel] Switching to iframe source - loading URL directly:', newUrl);
-                        embedFrame.src = newUrl;
-                        
-                        htmlEmbedContainer.style.display = 'block';
-                        if (video) video.style.display = 'none';
-                        if (youtubeIframe) {
-                            youtubeIframe.style.display = 'none';
-                            youtubeIframe.src = '';
-                        }
-                        
-                        // Update global streamUrl and streamType for consistency
-                        streamUrl = newUrl;
-                        streamType = newType;
-                        
-                        // Mark stream as loaded for this source
-                        streamLoaded = true;
-                        isLoadingStream = false;
-                        hideLoadingOverlay();
-                        return;
-                    } else if (!newUrl) {
-                        // If we still don't have a URL, show error and fall through to loadStream
-                        console.error('[TV Channel] No URL available for iframe source at index:', newIndex);
-                        handleSourceError('No stream URL available for iframe source');
-                        // Fall through to loadStream() which might handle it
-                    }
-                }
-                
-                // For html-embed sources, load the embed in the iframe inside the container via embed-source.php
-                if (newType === 'html-embed') {
-                    if (htmlEmbedContainer) {
-                        // Use the embedFrame already declared at function scope, or create if needed
-                        if (!embedFrame) {
-                            embedFrame = document.createElement('iframe');
-                            embedFrame.id = 'embedFrame';
-                            embedFrame.style.width = '100%';
-                            embedFrame.style.height = '100%';
-                            embedFrame.style.border = '0';
-                            embedFrame.setAttribute('allowfullscreen', '');
-                            embedFrame.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
-                            embedFrame.setAttribute('loading', 'eager');
-                            htmlEmbedContainer.innerHTML = '';
-                            htmlEmbedContainer.appendChild(embedFrame);
-                        }
-                        
-                        // Update currentSourceIndex for embedHtmlSources array
-                        currentSourceIndex = newIndex;
-                        
-                        // Build query parameters properly for Firefox compatibility
-                        const params = new URLSearchParams();
-                        if (channelSlug) {
-                            params.set('slug', channelSlug);
-                        } else {
-                            params.set('id', String(channelId));
-                        }
-                        params.set('source', isNaN(newIndex) ? 0 : newIndex);
-                        
-                        // Use BASE_URL_JS directly (not normalized) for embed-source.php since it's in root
-                        // Ensure absolute URL for Android/Firefox compatibility
-                        let embedUrl = BASE_URL_JS + '/embed-source.php?' + params.toString();
-                        
-                        // Ensure protocol is included (Android browsers are strict about this)
-                        if (!embedUrl.match(/^https?:\/\//)) {
-                            const protocol = window.location.protocol;
-                            embedUrl = protocol + '//' + embedUrl.replace(/^\/\//, '');
-                        }
-                        
-                        // Firefox on Android requires proper URL encoding - ensure it's a valid URL
-                        try {
-                            const testUrl = new URL(embedUrl); // Validate URL
-                            embedUrl = testUrl.href; // Use the normalized URL from URL object
-                        } catch (e) {
-                            console.error('[TV Channel] Invalid embed URL:', embedUrl, e);
-                            // Fallback: construct from current location
-                            const currentUrl = new URL(window.location.href);
-                            embedUrl = currentUrl.origin + '/embed-source.php?' + params.toString();
-                        }
-                        
-                        console.log('[TV Channel] Switching to HTML embed source via iframe:', embedUrl);
-                        
-                        // Firefox on Android: Set src using setAttribute for better compatibility
-                        embedFrame.setAttribute('src', embedUrl);
-                        
-                        // Also set .src property as fallback
-                        embedFrame.src = embedUrl;
-                        
-                        // Add error handler for debugging
-                        embedFrame.onerror = function() {
-                            console.error('[TV Channel] Iframe load error for:', embedUrl);
-                        };
-                        
-                        htmlEmbedContainer.style.display = 'block';
-                        if (video) video.style.display = 'none';
-                        if (youtubeIframe) {
-                            youtubeIframe.style.display = 'none';
-                            youtubeIframe.src = '';
-                        }
-                        
-                        // Mark stream as loaded for this source
-                        streamLoaded = true;
-                        isLoadingStream = false;
-                        hideLoadingOverlay();
-                        return;
-                    }
-                }
-                
-                // Non-embed sources: fall back to JS player logic
-                const newUrl = selectedOption.dataset.url || '';
-                const newStreamType = selectedOption.dataset.type || 'embed';
-                
-                // Try to get URL from activeSources if data-url is empty
-                let finalUrl = newUrl;
-                if (!finalUrl && typeof activeSources !== 'undefined' && activeSources[newIndex]) {
-                    finalUrl = activeSources[newIndex].url || '';
-                }
-                
-                // Update currentSourceIndex
-                currentSourceIndex = newIndex;
-                
-                streamUrl = finalUrl;
-                streamType = newStreamType;
-                
-                // Hide embed container when switching back to non-embed streams
-                if (htmlEmbedContainer) {
-                    htmlEmbedContainer.style.display = 'none';
-                }
-                // embedFrame is already declared at the top of this function
-                if (embedFrame) {
-                    embedFrame.src = 'about:blank';
-                }
-                
-                // Reload stream with new source
-                streamLoaded = false;
-                isLoadingStream = false;
-                loadStream();
-            });
-        }
-        
-        // Function to show/hide dropdowns based on number of options
-        function updateDropdownVisibility() {
-            // Show dropdowns if they exist and have multiple options
-            if (sourceSelectorMobile) {
-                const mobileOptions = sourceSelectorMobile.options.length;
-                console.log('[TV Channel] Mobile dropdown options:', mobileOptions, 'Element:', sourceSelectorMobile);
-                if (mobileOptions > 1) {
-                    handleSourceChange(sourceSelectorMobile);
-                    sourceSelectorMobile.style.display = 'block';
-                    sourceSelectorMobile.style.visibility = 'visible';
-                    sourceSelectorMobile.removeAttribute('hidden');
-                    console.log('[TV Channel] Mobile dropdown shown, computed display:', window.getComputedStyle(sourceSelectorMobile).display);
-                } else {
-                    sourceSelectorMobile.style.display = 'none';
-                    console.log('[TV Channel] Mobile dropdown hidden - only', mobileOptions, 'option(s)');
-                }
-            } else {
-                console.log('[TV Channel] Mobile dropdown element not found');
-            }
-            
-            if (sourceSelectorDesktop) {
-                const desktopOptions = sourceSelectorDesktop.options.length;
-                console.log('[TV Channel] Desktop dropdown options:', desktopOptions, 'Element:', sourceSelectorDesktop);
-                if (desktopOptions > 1) {
-                    handleSourceChange(sourceSelectorDesktop);
-                    sourceSelectorDesktop.style.display = 'block';
-                    sourceSelectorDesktop.style.visibility = 'visible';
-                    sourceSelectorDesktop.removeAttribute('hidden');
-                    console.log('[TV Channel] Desktop dropdown shown, computed display:', window.getComputedStyle(sourceSelectorDesktop).display);
-                } else {
-                    sourceSelectorDesktop.style.display = 'none';
-                    console.log('[TV Channel] Desktop dropdown hidden - only', desktopOptions, 'option(s)');
-                }
-            } else {
-                console.log('[TV Channel] Desktop dropdown element not found');
-            }
-        }
         
         // Real-time viewer tracking
         function updateViewerCount() {
@@ -4295,9 +4021,6 @@ if ($channel) {
         
         // Initialize player on page load
         document.addEventListener('DOMContentLoaded', function() {
-            // Update dropdown visibility when DOM is ready
-            updateDropdownVisibility();
-            
             <?php if ($showPremiumGate): ?>
             // Don't load stream if premium gate is shown
             return;

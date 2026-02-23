@@ -1,31 +1,51 @@
     </div>
+    <?php
+    // Ensure BASE_URL is defined
+    if (!defined('BASE_URL')) {
+        try {
+            require_once __DIR__ . '/../config/config.php';
+        } catch (Exception $e) {
+            define('BASE_URL', 'https://streampanel.live');
+        }
+    }
+    
+    // Get site name with error handling
+    $site_name = 'StreamPanel'; // Default fallback
+    try {
+        if (!isset($conn)) {
+            require_once __DIR__ . '/../config/database.php';
+            require_once __DIR__ . '/../admin/includes/functions.php';
+            $conn = getDBConnection();
+        }
+        if (isset($conn) && function_exists('getSetting')) {
+            $site_name = getSetting($conn, 'site_name', 'StreamPanel');
+        }
+    } catch (Exception $e) {
+        // Use default if there's any error
+        $site_name = 'StreamPanel';
+    }
+    ?>
     <footer class="bg-black border-t border-gray-800 mt-20 py-12">
         <div class="container mx-auto px-4">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div>
-                    <?php
-                    require_once __DIR__ . '/../config/database.php';
-                    require_once __DIR__ . '/../admin/includes/functions.php';
-                    $conn = getDBConnection();
-                    $site_name = getSetting($conn, 'site_name', 'StreamFlix');
-                    ?>
                     <h3 class="text-xl font-bold mb-4 netflix-red"><?php echo strtoupper(htmlspecialchars($site_name)); ?></h3>
                     <p class="text-gray-400">Your ultimate streaming destination</p>
                 </div>
                 <div>
                     <h4 class="font-semibold mb-4">Company</h4>
                     <ul class="space-y-2 text-gray-400">
-                        <li><a href="#" class="hover:text-white">About Us</a></li>
-                        <li><a href="#" class="hover:text-white">Contact</a></li>
-                        <li><a href="#" class="hover:text-white">Careers</a></li>
+                        <li><a href="<?php echo BASE_URL; ?>/about-us" class="hover:text-white">About Us</a></li>
+                        <li><a href="<?php echo BASE_URL; ?>/contact" class="hover:text-white">Contact</a></li>
+                        <li><a href="<?php echo BASE_URL; ?>/careers" class="hover:text-white">Careers</a></li>
                     </ul>
                 </div>
                 <div>
                     <h4 class="font-semibold mb-4">Legal</h4>
                     <ul class="space-y-2 text-gray-400">
-                        <li><a href="#" class="hover:text-white">Terms of Use</a></li>
-                        <li><a href="#" class="hover:text-white">Privacy Policy</a></li>
-                        <li><a href="#" class="hover:text-white">Cookie Policy</a></li>
+                        <li><a href="<?php echo BASE_URL; ?>/terms-of-use" class="hover:text-white">Terms of Use</a></li>
+                        <li><a href="<?php echo BASE_URL; ?>/privacy-policy" class="hover:text-white">Privacy Policy</a></li>
+                        <li><a href="<?php echo BASE_URL; ?>/cookie-policy" class="hover:text-white">Cookie Policy</a></li>
                     </ul>
                 </div>
                 <div>
@@ -45,15 +65,35 @@
     
     <!-- Mobile Footer Navigation - Android TV/Phone Style -->
     <?php
-    // Get enabled sections for navigation
-    if (!isset($enable_movies)) {
-        $enable_movies = isSectionEnabled($conn, 'movies');
-    }
-    if (!isset($enable_tv_shows)) {
-        $enable_tv_shows = isSectionEnabled($conn, 'tv_shows');
-    }
-    if (!isset($enable_live_tv)) {
-        $enable_live_tv = isSectionEnabled($conn, 'live_tv');
+    // Get enabled sections for navigation with error handling
+    try {
+        if (!isset($conn)) {
+            require_once __DIR__ . '/../config/database.php';
+            require_once __DIR__ . '/../admin/includes/functions.php';
+            $conn = getDBConnection();
+        }
+        
+        if (isset($conn) && function_exists('isSectionEnabled')) {
+            if (!isset($enable_movies)) {
+                $enable_movies = isSectionEnabled($conn, 'movies');
+            }
+            if (!isset($enable_tv_shows)) {
+                $enable_tv_shows = isSectionEnabled($conn, 'tv_shows');
+            }
+            if (!isset($enable_live_tv)) {
+                $enable_live_tv = isSectionEnabled($conn, 'live_tv');
+            }
+        } else {
+            // Default to enabled if functions not available
+            if (!isset($enable_movies)) $enable_movies = true;
+            if (!isset($enable_tv_shows)) $enable_tv_shows = true;
+            if (!isset($enable_live_tv)) $enable_live_tv = true;
+        }
+    } catch (Exception $e) {
+        // Default to enabled if there's an error
+        if (!isset($enable_movies)) $enable_movies = true;
+        if (!isset($enable_tv_shows)) $enable_tv_shows = true;
+        if (!isset($enable_live_tv)) $enable_live_tv = true;
     }
     
     // Check if Android TV (hide footer on Android TV)
@@ -66,7 +106,12 @@
     $current_page = basename($_SERVER['PHP_SELF']);
     $current_path = $_SERVER['REQUEST_URI'] ?? '';
     ?>
-    <?php if (!$isAndroidTV): ?>
+    <?php 
+    // Only show mobile footer nav on mobile devices (not desktop)
+    // Check if it's a mobile device (not desktop browser)
+    $isMobile = isset($_SERVER['HTTP_USER_AGENT']) && preg_match('/(Mobile|Android|iPhone|iPad|iPod|BlackBerry|Windows Phone)/i', $_SERVER['HTTP_USER_AGENT']);
+    ?>
+    <?php if (!$isAndroidTV && $isMobile): ?>
     <nav class="mobile-footer-nav">
         <a href="<?php echo BASE_URL; ?>/" class="nav-item <?php echo ($current_page == 'index.php' || $current_path == '/' || $current_path == BASE_URL . '/') ? 'active' : ''; ?>">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -88,7 +133,7 @@
         <?php endif; ?>
         
         <?php if ($enable_tv_shows): ?>
-        <a href="<?php echo BASE_URL; ?>/tv-shows" class="nav-item <?php echo ($current_page == 'tv-shows.php' || strpos($current_path, '/tv-shows') !== false) ? 'active' : ''; ?>">
+        <a href="<?php echo BASE_URL; ?>/tv-shows" class="nav-item <?php echo ($current_page == 'tv-shows.php' || strpos($current_path, '/tv-shows') !== false || strpos($current_path, '/tv-show/') !== false || $current_page == 'tv-show-detail.php') ? 'active' : ''; ?>">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
                 <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>

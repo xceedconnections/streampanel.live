@@ -1,34 +1,45 @@
 <?php
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
 
-// Require user to be logged in
-requireLogin();
-
 $page_title = "TV Show Details";
 $conn = getDBConnection();
+
+// Check if TV Shows section is enabled
+if (!isSectionEnabled($conn, 'tv_shows')) {
+    include 'includes/header.php';
+    ?>
+    <div class="min-h-screen flex items-center justify-center bg-gradient-to-b from-black via-gray-900 to-black py-20">
+        <div class="text-center">
+            <h1 class="text-4xl font-bold mb-4 text-red-500">Section is Under Maintenance</h1>
+            <p class="text-xl text-gray-400 mb-8">The TV Shows section is currently unavailable. Please check back later.</p>
+            <a href="/" class="bg-netflix-red px-6 py-3 rounded hover:bg-red-700 font-semibold">Go to Home</a>
+        </div>
+    </div>
+    <?php include 'includes/footer.php'; ?>
+    <?php exit(); }
+
+// TV Show detail page is always accessible without login (for SEO purposes)
+// Login requirement only applies to the watch page (episodes)
 
 // Get show ID from GET parameter - check both 'id' and 'slug' for flexibility
 $show_id = 0;
 $show_slug = '';
 
 // Check GET parameters - handle both direct access and clean URL rewrites
-if (isset($_GET['id']) && !empty($_GET['id'])) {
-    $show_id = intval($_GET['id']);
+if (isset($_GET['id'])) {
+    $raw_id = $_GET['id'];
+    if (!empty($raw_id)) {
+        $show_id = intval($raw_id);
+    }
 } elseif (isset($_GET['slug']) && !empty($_GET['slug'])) {
     $show_slug = trim($_GET['slug']);
 }
 
-// Debug logging
-error_log("TV Show Detail Debug: REQUEST_URI = " . ($_SERVER['REQUEST_URI'] ?? 'N/A'));
-error_log("TV Show Detail Debug: GET params - " . json_encode($_GET));
-error_log("TV Show Detail Debug: show_id = $show_id, show_slug = '$show_slug'");
-
 if ($show_id <= 0 && empty($show_slug)) {
-    require_once __DIR__ . '/config/config.php';
-    error_log("TV Show Detail Error: No valid ID or slug provided");
-    header('Location: ' . BASE_URL . '/tv-shows.php');
+    header('Location: ' . BASE_URL . '/tv-shows');
     exit();
 }
 
@@ -41,38 +52,36 @@ if ($show_id > 0) {
     $show_stmt = $conn->prepare("SELECT t.*, c.name as category_name FROM tv_shows t LEFT JOIN categories c ON t.category_id = c.id WHERE t.id = ?");
     if (!$show_stmt) {
         // Database error - redirect to listing page
-        require_once __DIR__ . '/config/config.php';
-        error_log("TV Show Detail Error: Failed to prepare statement - " . $conn->error);
-        header('Location: ' . BASE_URL . '/tv-shows.php');
+        header('Location: ' . BASE_URL . '/tv-shows');
         exit();
     }
     
     $show_stmt->bind_param("i", $show_id);
     if (!$show_stmt->execute()) {
         // Query execution error - redirect to listing page
-        require_once __DIR__ . '/config/config.php';
-        error_log("TV Show Detail Error: Failed to execute query - " . $show_stmt->error);
-        header('Location: ' . BASE_URL . '/tv-shows.php');
+        header('Location: ' . BASE_URL . '/tv-shows');
         exit();
     }
     
     $show = $show_stmt->get_result()->fetch_assoc();
     $show_stmt->close();
+    
+    // Redirect to clean URL if show has a slug and was accessed via ID
+    if ($show && !empty($show['slug']) && isset($_GET['id'])) {
+        header('Location: ' . BASE_URL . '/tv-show/' . htmlspecialchars($show['slug']));
+        exit();
+    }
 } elseif (!empty($show_slug)) {
     // Query by slug
     $show_stmt = $conn->prepare("SELECT t.*, c.name as category_name FROM tv_shows t LEFT JOIN categories c ON t.category_id = c.id WHERE t.slug = ?");
     if (!$show_stmt) {
-        require_once __DIR__ . '/config/config.php';
-        error_log("TV Show Detail Error: Failed to prepare statement for slug - " . $conn->error);
-        header('Location: ' . BASE_URL . '/tv-shows.php');
+        header('Location: ' . BASE_URL . '/tv-shows');
         exit();
     }
     
     $show_stmt->bind_param("s", $show_slug);
     if (!$show_stmt->execute()) {
-        require_once __DIR__ . '/config/config.php';
-        error_log("TV Show Detail Error: Failed to execute query for slug - " . $show_stmt->error);
-        header('Location: ' . BASE_URL . '/tv-shows.php');
+        header('Location: ' . BASE_URL . '/tv-shows');
         exit();
     }
     
@@ -87,18 +96,7 @@ if ($show_id > 0) {
 
 if (!$show) {
     // TV show not found - redirect to listing page
-    $search_id = $show_id > 0 ? $show_id : 'slug: ' . $show_slug;
-    error_log("TV Show Detail Error: TV show with $search_id not found in database");
-    
-    // Debug: Check if any TV shows exist at all
-    $debug_query = $conn->query("SELECT id, title, is_active, slug FROM tv_shows LIMIT 10");
-    if ($debug_query) {
-        $debug_shows = $debug_query->fetch_all(MYSQLI_ASSOC);
-        error_log("TV Show Detail Debug: Found " . count($debug_shows) . " TV shows in database. Sample: " . json_encode($debug_shows));
-    }
-    
-    require_once __DIR__ . '/config/config.php';
-    header('Location: ' . BASE_URL . '/tv-shows.php');
+    header('Location: ' . BASE_URL . '/tv-shows');
     exit();
 }
 
@@ -124,6 +122,11 @@ foreach ($all_episodes as $episode) {
 }
 
 $page_title = $show['title'];
+
+// Get enabled sections for navigation (needed for footer)
+$enable_movies = isSectionEnabled($conn, 'movies');
+$enable_tv_shows = isSectionEnabled($conn, 'tv_shows');
+$enable_live_tv = isSectionEnabled($conn, 'live_tv');
 
 include 'includes/header.php';
 ?>
@@ -174,7 +177,7 @@ img::before {
 }
 </style>
 
-<div class="min-h-screen bg-black">
+<div class="bg-black">
     <!-- Hero Section with Poster/Banner Only (No Thumbnail) -->
     <div class="tv-show-hero">
         <div class="tv-show-poster-container">
@@ -202,11 +205,6 @@ img::before {
                     <h1 class="text-4xl md:text-5xl font-bold mb-4"><?php echo htmlspecialchars($show['title']); ?></h1>
                     <p class="text-lg text-gray-300 mb-6 max-w-3xl leading-relaxed"><?php echo htmlspecialchars($show['description'] ?? 'No description available.'); ?></p>
                     <div class="flex flex-wrap items-center gap-4 text-gray-300">
-                        <?php if ($show['rating']): ?>
-                        <span class="bg-netflix-red px-4 py-2 rounded font-bold text-lg">
-                            <i class="fas fa-star mr-1"></i><?php echo number_format($show['rating'], 1); ?>
-                        </span>
-                        <?php endif; ?>
                         <?php if ($show['release_year']): ?>
                         <span class="text-lg">
                             <i class="fas fa-calendar mr-2"></i><?php echo $show['release_year']; ?>
@@ -266,7 +264,21 @@ img::before {
                     }
                     $has_sources = !empty($ep_sources) && count($ep_sources) > 0;
                     ?>
-                    <a href="<?php echo $has_sources ? 'watch.php?type=tv_episode&id=' . $episode['id'] : '#'; ?>" 
+                    <?php
+                    // Generate clean URL for episode
+                    $episode_url = '#';
+                    if ($has_sources && !empty($show['slug'])) {
+                        // Format: s{season}e{episode} (e.g., s01e01, s2e5)
+                        $season_padded = str_pad($episode['season_number'], 2, '0', STR_PAD_LEFT);
+                        $episode_padded = str_pad($episode['episode_number'], 2, '0', STR_PAD_LEFT);
+                        $episode_slug = 's' . $season_padded . 'e' . $episode_padded;
+                        $episode_url = BASE_URL . '/watch-tv-show/' . htmlspecialchars($show['slug']) . '/' . $episode_slug;
+                    } elseif ($has_sources) {
+                        // Fallback to ID-based URL if slug is not available
+                        $episode_url = BASE_URL . '/watch.php?type=tv_episode&id=' . $episode['id'];
+                    }
+                    ?>
+                    <a href="<?php echo $episode_url; ?>" 
                        class="block episode-card rounded-lg overflow-hidden group <?php echo !$has_sources ? 'opacity-60 cursor-not-allowed' : ''; ?>"
                        <?php if (!$has_sources): ?>onclick="event.preventDefault(); alert('This episode has no streaming sources available.');"<?php endif; ?>>
                         <div class="flex flex-col md:flex-row">
@@ -344,8 +356,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+</script>
 
 <?php if (isLoggedIn()): ?>
+<script>
 const contentType = 'tv_show';
 const contentId = <?php echo $show['id']; ?>;
 
