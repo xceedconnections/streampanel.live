@@ -80,8 +80,8 @@ if ($enable_movies && (!$movies_login_required || isLoggedIn())) {
     });
     $popular_movies = array_slice($popular_movies, 0, 10);
     
-    // Get hero movie (first featured or first popular)
-    $heroMovie = !empty($featured_movies) ? $featured_movies[0] : (!empty($popular_movies) ? reset($popular_movies) : null);
+    // Hero: only show when a movie is marked as featured (no fallback to popular)
+    $heroMovie = !empty($featured_movies) ? $featured_movies[0] : null;
     
     // Get hero image URL
     if ($heroMovie) {
@@ -89,19 +89,10 @@ if ($enable_movies && (!$movies_login_required || isLoggedIn())) {
     }
 }
 
-// Get TV shows (only if enabled) - always show on homepage for SEO
-$featured_tv_shows = [];
-$popular_tv_shows = [];
+// Get TV shows for index - featured first, max 6 (2 rows × 3), not in slider
+$tv_shows_for_index = [];
 if ($enable_tv_shows) {
-    // Get featured TV shows
-    $featured_tv_shows = $conn->query("SELECT * FROM tv_shows WHERE featured = 1 AND is_active = 1 ORDER BY created_at DESC LIMIT 10")->fetch_all(MYSQLI_ASSOC);
-    
-    // Get popular TV shows (non-featured)
-    $all_tv_shows = $conn->query("SELECT * FROM tv_shows WHERE is_active = 1 ORDER BY created_at DESC LIMIT 20")->fetch_all(MYSQLI_ASSOC);
-    $popular_tv_shows = array_filter($all_tv_shows, function($s) {
-        return !($s['featured'] ?? false);
-    });
-    $popular_tv_shows = array_slice($popular_tv_shows, 0, 10);
+    $tv_shows_for_index = $conn->query("SELECT * FROM tv_shows WHERE is_active = 1 ORDER BY featured DESC, created_at DESC LIMIT 6")->fetch_all(MYSQLI_ASSOC);
 }
 
 // Get live TV channels (only if enabled) - filter out channels without active sources
@@ -351,14 +342,14 @@ include 'includes/header.php';
 .content-rows.has-slider {
     margin-top: 0;
 }
-/* When only live TV is enabled (no hero section), add top padding instead of negative margin */
+/* When no hero section: add top padding so content is not hidden behind fixed navbar */
 .content-rows.no-hero {
     margin-top: 0;
-    padding-top: 5rem; /* Account for fixed header */
+    padding-top: 6rem; /* Clear fixed header so first row (e.g. Live TV) is not overlayed */
 }
 @media (min-width: 768px) {
     .content-rows.no-hero {
-        padding-top: 6rem;
+        padding-top: 7rem;
     }
 }
 
@@ -505,6 +496,58 @@ include 'includes/header.php';
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* TV Shows Section on index - grid 3 per row, 2 rows (6 total), not slider */
+.tv-shows-section {
+    padding: 0 1.5rem;
+}
+@media (min-width: 768px) {
+    .tv-shows-section {
+        padding: 0 3rem;
+    }
+}
+.tv-shows-section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.tv-shows-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+.tv-shows-grid .tv-show-card-wrap {
+    position: relative;
+    background: #141414;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+.tv-shows-grid .tv-show-card-wrap:hover {
+    text-decoration: none;
+    color: inherit;
+}
+.tv-shows-grid .tv-show-poster {
+    aspect-ratio: 16/9;
+    width: 100%;
+    object-fit: contain;
+    background: #000;
+    display: block;
+}
+.tv-shows-grid .tv-show-card-title {
+    padding: 0.75rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #fff;
 }
 
 /* Live TV Section */
@@ -719,8 +762,8 @@ include 'includes/header.php';
     include 'includes/slider-display.php';
     ?>
     
-    <!-- Content Rows -->
-    <div class="content-rows <?php if (!$enable_movies && !$enable_tv_shows && !$heroMovie): ?>no-hero<?php endif; ?> <?php if (!empty($GLOBALS['page_has_sliders'])): ?>has-slider<?php endif; ?>">
+    <!-- Content Rows (no-hero = no big hero banner, so add top padding so content is not hidden under fixed menu) -->
+    <div class="content-rows <?php if (!$heroMovie): ?>no-hero<?php endif; ?> <?php if (!empty($GLOBALS['page_has_sliders'])): ?>has-slider<?php endif; ?>">
         <!-- Featured Movies -->
         <?php if (!empty($featured_movies)): ?>
             <div class="movie-row group/row">
@@ -795,92 +838,40 @@ include 'includes/header.php';
             </div>
         <?php endif; ?>
         
-        <!-- Featured TV Shows -->
-        <?php if (!empty($featured_tv_shows)): ?>
-            <div class="movie-row movie-row-tv group/row">
-                <h2 class="movie-row-title">📺 Featured TV Shows</h2>
-                <div class="movie-row-container">
-                    <button class="movie-row-btn movie-row-btn-left" onclick="slideRow(this, 'left')">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="15 18 9 12 15 6"></polyline>
-                        </svg>
-                    </button>
-                    <div class="movie-row-scroll" data-row="featured-tv">
-                        <?php foreach ($featured_tv_shows as $show): ?>
-                            <?php
-                            $show_url = '';
-                            if (!empty($show['slug'])) {
-                                $show_url = BASE_URL . '/tv-show/' . htmlspecialchars($show['slug']);
-                            } else {
-                                $show_url = BASE_URL . '/tv-show-detail?id=' . $show['id'];
-                            }
-                            ?>
-                            <div>
-                                <a href="<?php echo $show_url; ?>" class="movie-card">
-                                    <img src="<?php echo htmlspecialchars($show['poster'] ?? FALLBACK_POSTER); ?>" 
-                                         alt="<?php echo htmlspecialchars($show['title']); ?>" 
-                                         loading="lazy"
-                                         onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
-                                    <div class="movie-card-overlay">
-                                        <p><?php echo htmlspecialchars($show['title']); ?></p>
-                                    </div>
-                                </a>
-                                <div class="tv-show-card-title">
-                                    <?php echo htmlspecialchars($show['title']); ?>
-                                </div>
+        <!-- TV Shows - grid 3 per row, 2 rows (6 max), not slider; featured first -->
+        <?php if (!empty($tv_shows_for_index)): ?>
+            <div class="tv-shows-section">
+                <h2 class="tv-shows-section-title">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #e50914;">
+                        <rect width="20" height="15" x="2" y="4" rx="2" ry="2"></rect>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                    </svg>
+                    TV Shows
+                </h2>
+                <div class="tv-shows-grid">
+                    <?php foreach ($tv_shows_for_index as $show): ?>
+                        <?php
+                        $show_url = !empty($show['slug']) ? BASE_URL . '/tv-show/' . htmlspecialchars($show['slug']) : BASE_URL . '/tv-show-detail?id=' . $show['id'];
+                        ?>
+                        <a href="<?php echo $show_url; ?>" class="tv-show-card-wrap">
+                            <img src="<?php echo htmlspecialchars($show['poster'] ?? FALLBACK_POSTER); ?>" 
+                                 alt="<?php echo htmlspecialchars($show['title']); ?>" 
+                                 class="tv-show-poster"
+                                 loading="lazy"
+                                 onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
+                            <div class="tv-show-card-title">
+                                <?php echo htmlspecialchars($show['title']); ?>
+                                <?php if (!empty($show['featured'])): ?>
+                                <span class="text-yellow-400 text-xs ml-1">⭐</span>
+                                <?php endif; ?>
                             </div>
-                        <?php endforeach; ?>
-                    </div>
-                    <button class="movie-row-btn movie-row-btn-right" onclick="slideRow(this, 'right')">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                        </svg>
-                    </button>
+                        </a>
+                    <?php endforeach; ?>
                 </div>
-            </div>
-        <?php endif; ?>
-        
-        <!-- Popular TV Shows -->
-        <?php if (!empty($popular_tv_shows)): ?>
-            <div class="movie-row movie-row-tv group/row">
-                <h2 class="movie-row-title">📺 Popular TV Shows</h2>
-                <div class="movie-row-container">
-                    <button class="movie-row-btn movie-row-btn-left" onclick="slideRow(this, 'left')">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="15 18 9 12 15 6"></polyline>
-                        </svg>
-                    </button>
-                    <div class="movie-row-scroll" data-row="popular-tv">
-                        <?php foreach ($popular_tv_shows as $show): ?>
-                            <?php
-                            $show_url = '';
-                            if (!empty($show['slug'])) {
-                                $show_url = BASE_URL . '/tv-show/' . htmlspecialchars($show['slug']);
-                            } else {
-                                $show_url = BASE_URL . '/tv-show-detail?id=' . $show['id'];
-                            }
-                            ?>
-                            <div>
-                                <a href="<?php echo $show_url; ?>" class="movie-card">
-                                    <img src="<?php echo htmlspecialchars($show['poster'] ?? FALLBACK_POSTER); ?>" 
-                                         alt="<?php echo htmlspecialchars($show['title']); ?>" 
-                                         loading="lazy"
-                                         onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
-                                    <div class="movie-card-overlay">
-                                        <p><?php echo htmlspecialchars($show['title']); ?></p>
-                                    </div>
-                                </a>
-                                <div class="tv-show-card-title">
-                                    <?php echo htmlspecialchars($show['title']); ?>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                    <button class="movie-row-btn movie-row-btn-right" onclick="slideRow(this, 'right')">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                        </svg>
-                    </button>
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <a href="<?php echo BASE_URL; ?>/tv-shows" style="color: #e50914; text-decoration: none; font-weight: 600;">
+                        View More TV Shows →
+                    </a>
                 </div>
             </div>
         <?php endif; ?>
@@ -951,7 +942,7 @@ include 'includes/header.php';
                     <?php endforeach; ?>
                 </div>
                 <div style="text-align: center; margin-top: 1.5rem;">
-                    <a href="/live-tv" style="color: #e50914; text-decoration: none; font-weight: 600;">
+                    <a href="<?php echo BASE_URL; ?>/live-tv" style="color: #e50914; text-decoration: none; font-weight: 600;">
                         View More TV Channels →
                     </a>
                 </div>

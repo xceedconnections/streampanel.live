@@ -1,14 +1,31 @@
 <?php
 /**
  * Slider Display Component
- * Displays sliders with auto-rotate and navigation arrows
+ * Displays sliders with auto-rotate and navigation arrows.
+ * Slider content is ONLY from Admin > Sliders (slider_slides). Nothing is auto-added from featured or show_in_slider.
  */
 
-// Get sliders for the current page
+// Get sliders for the current page (only from Admin > Sliders)
 $page_sliders = getSlidersForPage($conn, $page_type);
 
+// On home page (index), do not show TV show slides in the slider - only movies, live_tv, external
+if ($page_type === 'home') {
+    foreach ($page_sliders as &$s) {
+        $s['slides'] = array_filter($s['slides'] ?? [], function ($slide) {
+            return ($slide['link_type'] ?? '') !== 'tv_show';
+        });
+        $s['slides'] = array_values($s['slides']);
+    }
+    unset($s);
+}
+
+// Only show slider when at least one slider has at least one slide added in admin
+$page_sliders = array_filter($page_sliders, function ($s) {
+    return !empty($s['slides']);
+});
+
 if (empty($page_sliders)) {
-    return; // No sliders to display
+    return; // No sliders with slides to display
 }
 
 // Let the parent page know that sliders are present (used for layout adjustments)
