@@ -19,7 +19,7 @@ $validTabs = [
     'tools', 'match-replace', 'import-sql',
     'delete-m3u8-channels', 'delete-no-source-channels', 'delete-dash-channels',
     'remove-bad-m3u8-sources', 'remove-bad-dash-sources', 'remove-http-stream-links',
-    'search-check-streams'
+    'search-check-streams', 'remove-no-logo-channels'
 ];
 
 if (!in_array($tab, $validTabs)) {
@@ -1177,7 +1177,7 @@ $stats = getAdminStats($conn);
                             <a href="?tab=countdown" class="nav-item px-3 py-2 hover:text-gray-300 whitespace-nowrap flex-shrink-0 <?php echo $tab === 'countdown' ? 'active font-bold text-netflix-red' : ''; ?>">
                                 <i class="fas fa-clock mr-2"></i>Countdown
                             </a>
-                            <a href="?tab=tools" class="nav-item px-3 py-2 hover:text-gray-300 whitespace-nowrap flex-shrink-0 <?php echo in_array($tab, ['tools', 'match-replace', 'import-sql', 'delete-m3u8-channels', 'delete-no-source-channels', 'delete-dash-channels', 'remove-bad-m3u8-sources', 'remove-bad-dash-sources', 'remove-http-stream-links']) ? 'active font-bold text-netflix-red' : ''; ?>">
+                            <a href="?tab=tools" class="nav-item px-3 py-2 hover:text-gray-300 whitespace-nowrap flex-shrink-0 <?php echo in_array($tab, ['tools', 'match-replace', 'import-sql', 'delete-m3u8-channels', 'delete-no-source-channels', 'delete-dash-channels', 'remove-bad-m3u8-sources', 'remove-bad-dash-sources', 'remove-http-stream-links', 'search-check-streams', 'remove-no-logo-channels']) ? 'active font-bold text-netflix-red' : ''; ?>">
                                 <i class="fas fa-tools mr-2"></i>Tools
                             </a>
                         </div>
@@ -1225,6 +1225,8 @@ $stats = getAdminStats($conn);
             $tabFile = __DIR__ . '/remove-http-stream-links.php';
         } elseif ($tab === 'search-check-streams') {
             $tabFile = __DIR__ . '/search-check-streams.php';
+        } elseif ($tab === 'remove-no-logo-channels') {
+            $tabFile = __DIR__ . '/remove-no-logo-channels.php';
         }
         
         if (file_exists($tabFile)) {

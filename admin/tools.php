@@ -104,6 +104,19 @@ $page_title = "Tools";
             </p>
         </a>
 
+        <!-- Remove Channels Without Logo -->
+        <a href="?tab=remove-no-logo-channels" class="bg-gray-800 hover:bg-gray-700 rounded-lg p-6 transition-all border border-gray-700 hover:border-orange-600">
+            <div class="flex items-center mb-4">
+                <div class="bg-orange-600 bg-opacity-20 p-3 rounded-lg mr-4">
+                    <i class="fas fa-image text-orange-500 text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-bold">Remove Channels Without Logo</h3>
+            </div>
+            <p class="text-gray-400 text-sm">
+                See how many live TV channels have no logo, then remove them in one step. Channels with a logo are never touched.
+            </p>
+        </a>
+
         <!-- Remove HTTP-only HLS/DASH Stream Links -->
         <a href="?tab=remove-http-stream-links" class="bg-gray-800 hover:bg-gray-700 rounded-lg p-6 transition-all border border-gray-700 hover:border-yellow-500">
             <div class="flex items-center mb-4">
