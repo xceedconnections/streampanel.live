@@ -598,8 +598,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
                 </tr>
                 <tr class="border-b border-gray-700">
                     <td class="py-2 px-3"><code class="bg-gray-900 px-2 py-1 rounded">Logo</code></td>
-                    <td class="py-2 px-3"><span class="text-green-400">No</span></td>
-                    <td class="py-2 px-3">Logo URL (will be downloaded automatically)</td>
+                    <td class="py-2 px-3"><span class="text-red-400">Yes (new channels)</span></td>
+                    <td class="py-2 px-3">Logo URL — required for <strong>new</strong> channels; must download successfully or the row is skipped. Existing channels with a logo only get new stream URLs merged when different.</td>
                 </tr>
                 <tr class="border-b border-gray-700">
                     <td class="py-2 px-3"><code class="bg-gray-900 px-2 py-1 rounded">Country</code></td>
@@ -629,11 +629,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
 <div class="bg-green-900 bg-opacity-30 border border-green-700 rounded-lg p-4">
     <h4 class="font-semibold text-green-200 mb-2">✓ Import Features</h4>
     <ul class="text-sm text-gray-300 space-y-1 list-disc list-inside">
+        <li>New channels: <strong>Logo</strong> column required; logo must download successfully or the channel is not created</li>
+        <li>Existing channel that already has a logo: merges new stream URL only if it differs from current sources</li>
+        <li>Existing channel with no logo: optional logo URL in file will be downloaded and saved; then new stream URL is merged if different</li>
         <li>Automatically downloads logos from URLs and saves them locally</li>
         <li>Detects stream protocol type (HLS, DASH, YouTube, etc.)</li>
-        <li>If channel name exists, checks if stream URL is different</li>
-        <li>If stream URL is same, skips the row</li>
-        <li>If stream URL is different or protocol is different, adds it as a new source to the existing channel</li>
+        <li>If stream URL is same as an existing source, skips the row</li>
         <li>Supports multiple sources per channel</li>
         <li>Generates unique slugs automatically</li>
     </ul>

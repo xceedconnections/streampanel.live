@@ -171,6 +171,32 @@ function sourceExists($sources_json, $new_url) {
     return false;
 }
 
+/**
+ * Convert relative logo path from downloadImageFromUrl to absolute URL stored in DB.
+ */
+function buildAbsoluteLogoUrl($relative_path, $conn) {
+    if (empty($relative_path)) {
+        return null;
+    }
+    if (preg_match('#^https?://#i', $relative_path)) {
+        return $relative_path;
+    }
+    if (defined('BASE_URL') && !empty(BASE_URL)) {
+        return rtrim(BASE_URL, '/') . '/' . ltrim($relative_path, '/');
+    }
+    try {
+        if ($conn) {
+            $settings_query = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'site_url' LIMIT 1");
+            if ($settings_query && $settings_row = $settings_query->fetch_assoc()) {
+                return rtrim($settings_row['setting_value'], '/') . '/' . ltrim($relative_path, '/');
+            }
+        }
+    } catch (Exception $e) {
+        // ignore
+    }
+    return '/' . ltrim($relative_path, '/');
+}
+
 function addSourceToChannel($conn, $channel_id, $new_url, $stream_type) {
     $channel_data = $conn->prepare("SELECT sources FROM live_tv_channels WHERE id = ?");
     $channel_data->bind_param("i", $channel_id);
@@ -539,57 +565,72 @@ elseif ($action === 'process' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $logo_path = null;
             
             if ($result->num_rows > 0) {
-                // Channel exists - use existing logo, don't download again
+                // Channel exists
                 $existing = $result->fetch_assoc();
-                $logo_path = $existing['logo'] ?? null;
                 $existing_sources = $existing['sources'] ?? '[]';
-                
+                $db_logo = trim((string) ($existing['logo'] ?? ''));
+                $has_db_logo = $db_logo !== '';
+
                 if (sourceExists($existing_sources, $stream_url)) {
                     $progress['skipped']++;
                     $progress['current_channel'] = $channel_name . ' (skipped - source exists)';
                     $progress['processed']++;
                     $_SESSION['iptv_import_progress'] = $progress;
                     continue;
-                } else {
-                    // Check if stopped before updating
-                    if (isset($_SESSION['iptv_import_stopped']) && $_SESSION['iptv_import_stopped'] === true) {
-                        $progress['status'] = 'stopped';
-                        $progress['current_channel'] = 'Import stopped by user';
-                        break;
-                    }
-                    
-                    // Add new source to existing channel
+                }
+
+                if (isset($_SESSION['iptv_import_stopped']) && $_SESSION['iptv_import_stopped'] === true) {
+                    $progress['status'] = 'stopped';
+                    $progress['current_channel'] = 'Import stopped by user';
+                    break;
+                }
+
+                // Channel already has a logo: only merge new stream URL if different (already handled by sourceExists)
+                if ($has_db_logo) {
                     if (addSourceToChannel($conn, $existing['id'], $stream_url, $stream_type)) {
                         $progress['updated']++;
-                        $progress['current_channel'] = $channel_name . ' (updated)';
+                        $progress['current_channel'] = $channel_name . ' (updated sources)';
                     } else {
                         $progress['errors']++;
                         $progress['current_channel'] = $channel_name . ' (error adding source)';
                     }
                     $progress['processed']++;
-                    
-                    // Update session after each channel for real-time progress
                     $_SESSION['iptv_import_progress'] = $progress;
                     continue;
                 }
+
+                // Existing channel but no logo in DB: try to download logo from Excel when URL provided
+                if (!empty($logo_url)) {
+                    $rel = downloadImageFromUrl($logo_url, $upload_dir, $channel_name);
+                    if ($rel) {
+                        $abs_logo = buildAbsoluteLogoUrl($rel, $conn);
+                        $up = $conn->prepare("UPDATE live_tv_channels SET logo = ? WHERE id = ?");
+                        $up->bind_param("si", $abs_logo, $existing['id']);
+                        $up->execute();
+                    }
+                }
+
+                if (isset($_SESSION['iptv_import_stopped']) && $_SESSION['iptv_import_stopped'] === true) {
+                    $progress['status'] = 'stopped';
+                    $progress['current_channel'] = 'Import stopped by user';
+                    break;
+                }
+
+                if (addSourceToChannel($conn, $existing['id'], $stream_url, $stream_type)) {
+                    $progress['updated']++;
+                    $progress['current_channel'] = $channel_name . ' (updated)';
+                } else {
+                    $progress['errors']++;
+                    $progress['current_channel'] = $channel_name . ' (error adding source)';
+                }
+                $progress['processed']++;
+                $_SESSION['iptv_import_progress'] = $progress;
+                continue;
             } else {
-                // Channel doesn't exist - FIRST check for duplicates BEFORE downloading logo
+                // New channel (name not in DB)
                 $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $channel_name)));
                 $slug = preg_replace('/-+/', '-', $slug);
                 $slug = trim($slug, '-');
-                
-                // Check if channel name already exists (to avoid duplicates) - DO THIS FIRST
-                $name_check = $conn->prepare("SELECT id FROM live_tv_channels WHERE name = ?");
-                $name_check->bind_param("s", $channel_name);
-                $name_check->execute();
-                if ($name_check->get_result()->num_rows > 0) {
-                    // Channel name already exists - skip to avoid duplicate (don't download logo)
-                    $progress['skipped']++;
-                    $progress['current_channel'] = $channel_name . ' (skipped - duplicate channel name)';
-                    $progress['processed']++;
-                    $_SESSION['iptv_import_progress'] = $progress;
-                    continue;
-                }
                 
                 // Check if slug already exists (to avoid duplicates)
                 $slug_check = $conn->prepare("SELECT id FROM live_tv_channels WHERE slug = ?");
@@ -599,53 +640,44 @@ elseif ($action === 'process' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $slug = $slug . '-' . time() . '-' . uniqid();
                 }
                 
-                // NOW download logo if provided (only after confirming no duplicate)
-                if (!empty($logo_url)) {
-                    // Check if stopped before logo download
-                    if (isset($_SESSION['iptv_import_stopped']) && $_SESSION['iptv_import_stopped'] === true) {
-                        $progress['status'] = 'stopped';
-                        $progress['current_channel'] = 'Import stopped by user';
-                        break;
-                    }
-                    
-                    // Use channel name to generate a friendly logo filename
-                    $logo_path = downloadImageFromUrl($logo_url, $upload_dir, $channel_name);
-                    
-                    // Check if stopped after logo download
-                    if (isset($_SESSION['iptv_import_stopped']) && $_SESSION['iptv_import_stopped'] === true) {
-                        $progress['status'] = 'stopped';
-                        $progress['current_channel'] = 'Import stopped by user';
-                        break;
-                    }
-                    
-                    if (!$logo_path) {
-                        // Logo download failed - skip this channel (don't import)
-                        $progress['skipped']++;
-                        $progress['current_channel'] = $channel_name . ' (skipped - logo download failed)';
-                        $progress['processed']++;
-                        $_SESSION['iptv_import_progress'] = $progress;
-                        continue;
-                    }
-                    // Logo downloaded successfully - convert to full URL
-                    if (defined('BASE_URL') && !empty(BASE_URL)) {
-                        $logo_path = rtrim(BASE_URL, '/') . '/' . $logo_path;
-                    } else {
-                        // Fallback: try to get from database settings
-                        try {
-                            $settings_query = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'site_url' LIMIT 1");
-                            if ($settings_query && $settings_row = $settings_query->fetch_assoc()) {
-                                $base_url = rtrim($settings_row['setting_value'], '/');
-                                $logo_path = $base_url . '/' . $logo_path;
-                            } else {
-                                $logo_path = '/' . $logo_path;
-                            }
-                        } catch (Exception $e) {
-                            $logo_path = '/' . $logo_path;
-                        }
-                    }
-                } else {
-                    // No logo URL provided - allow import without logo
-                    $logo_path = null;
+                // New channels require a valid Logo column and successful download (no channel without logo)
+                if (empty($logo_url)) {
+                    $progress['skipped']++;
+                    $progress['current_channel'] = $channel_name . ' (skipped - logo URL required for new channels)';
+                    $progress['processed']++;
+                    $_SESSION['iptv_import_progress'] = $progress;
+                    continue;
+                }
+
+                if (isset($_SESSION['iptv_import_stopped']) && $_SESSION['iptv_import_stopped'] === true) {
+                    $progress['status'] = 'stopped';
+                    $progress['current_channel'] = 'Import stopped by user';
+                    break;
+                }
+
+                $rel_logo = downloadImageFromUrl($logo_url, $upload_dir, $channel_name);
+
+                if (isset($_SESSION['iptv_import_stopped']) && $_SESSION['iptv_import_stopped'] === true) {
+                    $progress['status'] = 'stopped';
+                    $progress['current_channel'] = 'Import stopped by user';
+                    break;
+                }
+
+                if (!$rel_logo) {
+                    $progress['skipped']++;
+                    $progress['current_channel'] = $channel_name . ' (skipped - logo download failed)';
+                    $progress['processed']++;
+                    $_SESSION['iptv_import_progress'] = $progress;
+                    continue;
+                }
+
+                $logo_path = buildAbsoluteLogoUrl($rel_logo, $conn);
+                if (empty($logo_path)) {
+                    $progress['skipped']++;
+                    $progress['current_channel'] = $channel_name . ' (skipped - could not build logo URL)';
+                    $progress['processed']++;
+                    $_SESSION['iptv_import_progress'] = $progress;
+                    continue;
                 }
                 
                 $sources = [[
