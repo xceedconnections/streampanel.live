@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $file_path = $upload_dir . $file_name;
 
             if (move_uploaded_file($_FILES['poster_file']['tmp_name'], $file_path)) {
-                $poster = BASE_URL . '/uploads/tv-show-logos/' . $file_name;
+                $poster = 'uploads/tv-show-logos/' . $file_name;
             }
         }
     }

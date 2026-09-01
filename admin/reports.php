@@ -27,8 +27,12 @@ $concurrent_viewers_by_channel = getConcurrentViewersByChannel($conn);
 $total_concurrent_episode_viewers = getTotalConcurrentEpisodeViewers($conn);
 $concurrent_viewers_by_episode = getConcurrentViewersByEpisode($conn);
 
-// Total concurrent viewers (channels + episodes)
-$total_all_concurrent_viewers = $total_concurrent_viewers + $total_concurrent_episode_viewers;
+// Get concurrent movie viewers
+$total_concurrent_movie_viewers = getTotalConcurrentMovieViewers($conn);
+$concurrent_viewers_by_movie = getConcurrentViewersByMovie($conn);
+
+// Total concurrent viewers (channels + episodes + movies)
+$total_all_concurrent_viewers = $total_concurrent_viewers + $total_concurrent_episode_viewers + $total_concurrent_movie_viewers;
 ?>
 <div class="mb-8">
     <h1 class="text-4xl font-bold mb-2">Reports & Analytics</h1>
@@ -55,7 +59,7 @@ $total_all_concurrent_viewers = $total_concurrent_viewers + $total_concurrent_ep
     <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 border-2 border-green-500">
         <p class="text-gray-400 text-sm mb-1">Live Viewers Now</p>
         <p class="text-3xl font-bold text-green-400"><?php echo number_format($total_all_concurrent_viewers); ?></p>
-        <p class="text-xs text-gray-500 mt-1">Real-time concurrent (TV + Episodes)</p>
+        <p class="text-xs text-gray-500 mt-1">Real-time concurrent (TV + Episodes + Movies)</p>
     </div>
 </div>
 
@@ -107,7 +111,7 @@ $total_all_concurrent_viewers = $total_concurrent_viewers + $total_concurrent_ep
 </div>
 
 <!-- Concurrent Live Viewers Section -->
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
     <!-- TV Channels Viewers -->
     <div class="bg-gray-900 rounded-lg p-6">
         <div class="flex items-center justify-between mb-4">
@@ -205,6 +209,50 @@ $total_all_concurrent_viewers = $total_concurrent_viewers + $total_concurrent_ep
             <?php endif; ?>
         </div>
     </div>
+
+    <!-- Movie Viewers -->
+    <div class="bg-gray-900 rounded-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold">Movie Viewers (Real-time)</h3>
+            <button onclick="refreshMovieViewers()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm">
+                <i class="fas fa-sync-alt mr-2"></i>Refresh
+            </button>
+        </div>
+        <div id="movie-viewers-container">
+            <?php if (empty($concurrent_viewers_by_movie)): ?>
+            <p class="text-gray-400 text-center py-8">No active movie viewers at the moment</p>
+            <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-gray-800">
+                            <th class="text-left p-3">Movie</th>
+                            <th class="text-left p-3">Concurrent Viewers</th>
+                            <th class="text-left p-3">Total Views</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($concurrent_viewers_by_movie as $viewer_data): ?>
+                        <tr class="border-b border-gray-800 hover:bg-gray-800">
+                            <td class="p-3">
+                                <div class="font-semibold text-sm"><?php echo htmlspecialchars($viewer_data['movie_title'] ?? 'Unknown Movie'); ?></div>
+                            </td>
+                            <td class="p-3">
+                                <span class="px-3 py-1 bg-green-900 text-green-200 rounded-full font-bold">
+                                    <i class="fas fa-eye mr-1"></i><?php echo number_format($viewer_data['concurrent_viewers']); ?>
+                                </span>
+                            </td>
+                            <td class="p-3 text-gray-400">
+                                <?php echo number_format($viewer_data['total_views'] ?? 0); ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -228,11 +276,25 @@ function refreshEpisodeViewers() {
     }, 500);
 }
 
+function refreshMovieViewers() {
+    const container = document.getElementById('movie-viewers-container');
+    if (container) {
+        container.innerHTML = '<p class="text-gray-400 text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Refreshing...</p>';
+    }
+
+    setTimeout(() => {
+        window.location.reload();
+    }, 500);
+}
+
+function refreshAllViewers() {
+    window.location.reload();
+}
+
 // Auto-refresh every 10 seconds
 setInterval(function() {
     if (document.visibilityState === 'visible') {
-        // Refresh both sections
-        refreshLiveViewers();
+        refreshAllViewers();
     }
 }, 10000);
 </script>

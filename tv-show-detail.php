@@ -182,7 +182,7 @@ img::before {
     <div class="tv-show-hero">
         <div class="tv-show-poster-container">
             <?php if (!empty($show['poster'])): ?>
-            <img src="<?php echo htmlspecialchars($show['poster']); ?>" 
+            <img src="<?php echo htmlspecialchars(assetUrl($show['poster'] ?? '')); ?>" 
                  alt="<?php echo htmlspecialchars($show['title']); ?>"
                  class="tv-show-poster"
                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -283,7 +283,7 @@ img::before {
                        <?php if (!$has_sources): ?>onclick="event.preventDefault(); alert('This episode has no streaming sources available.');"<?php endif; ?>>
                         <div class="flex flex-col md:flex-row">
                             <div class="relative w-full md:w-80 flex-shrink-0 bg-black">
-                                <img src="<?php echo htmlspecialchars($episode['thumbnail'] ?? $show['poster'] ?? 'https://via.placeholder.com/1280x720'); ?>" 
+                                <img src="<?php echo htmlspecialchars(assetUrl($episode['thumbnail'] ?? $show['poster'] ?? '') ?: 'https://via.placeholder.com/1280x720'); ?>" 
                                      alt="<?php echo htmlspecialchars($episode['title']); ?>" 
                                      class="episode-thumbnail w-full">
                                 <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition flex items-center justify-center">
@@ -365,7 +365,7 @@ const contentId = <?php echo $show['id']; ?>;
 
 async function checkFavorite() {
     try {
-        const response = await fetch(`<?php echo BASE_URL; ?>/api/favorites.php?content_type=${contentType}&content_id=${contentId}`);
+        const response = await fetch(`<?php echo apiUrl('api/favorites.php'); ?>?content_type=${contentType}&content_id=${contentId}`);
         const data = await response.json();
         if (data.success && data.is_favorite) {
             document.getElementById('favoriteIcon').classList.add('text-red-500');
@@ -383,7 +383,7 @@ async function toggleFavorite() {
     const isFavorite = icon.classList.contains('text-red-500');
     
     try {
-        const url = `<?php echo BASE_URL; ?>/api/favorites.php`;
+        const url = `<?php echo apiUrl('api/favorites.php'); ?>`;
         const method = isFavorite ? 'DELETE' : 'POST';
         const response = await fetch(url, {
             method: method,

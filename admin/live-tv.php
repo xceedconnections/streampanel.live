@@ -144,10 +144,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['bulk_action'])) {
                         }
                     }
                 }
-                $logo = BASE_URL . '/uploads/tv-logos/' . $file_name;
+                $logo = 'uploads/tv-logos/' . $file_name;
             }
         }
     }
+    
+    $logo = normalizeUploadPath($logo);
     
     // Handle sources - IMPORTANT: Make sure type is properly saved
     // For embed-style types we must NOT strip HTML tags, so full embed code is stored
@@ -604,7 +606,7 @@ function toggleAddForm() {
                     </td>
                     <td class="p-3">
                         <?php if (!empty($channel['logo'])): ?>
-                        <img src="<?php echo htmlspecialchars($channel['logo']); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" 
+                        <img src="<?php echo htmlspecialchars(assetUrl($channel['logo'])); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" 
                              class="w-12 h-12 object-contain bg-gray-800 rounded p-1" 
                              onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22%3E%3Crect fill=%22%23333%22 width=%2248%22 height=%2248%22/%3E%3Ctext fill=%22%23999%22 x=%2212%22 y=%2230%22 font-size=%2214%22%3ETV%3C/text%3E%3C/svg%3E'">
                         <?php else: ?>
@@ -767,7 +769,7 @@ setInterval(function() {
         
         if (channelIds.length > 0) {
             // Fetch viewer counts via AJAX
-            fetch('api/get_live_viewers.php?channels=' + channelIds.join(','))
+            fetch('<?php echo apiUrl('admin/api/get_live_viewers.php'); ?>?channels=' + channelIds.join(','))
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {

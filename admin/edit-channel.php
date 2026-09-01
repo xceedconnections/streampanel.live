@@ -80,16 +80,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if (move_uploaded_file($_FILES['logo_file']['tmp_name'], $file_path)) {
                 // Delete old logo if exists
-                if (!empty($edit_channel['logo']) && strpos($edit_channel['logo'], 'uploads/tv-logos/') !== false) {
-                    $old_file_path = str_replace(BASE_URL . '/', __DIR__ . '/../', $edit_channel['logo']);
-                    if (file_exists($old_file_path)) {
-                        @unlink($old_file_path);
+                if (!empty($edit_channel['logo'])) {
+                    $old_rel = normalizeUploadPath($edit_channel['logo']);
+                    if ($old_rel !== '') {
+                        $old_file_path = dirname(__DIR__) . '/' . $old_rel;
+                        if (file_exists($old_file_path)) {
+                            @unlink($old_file_path);
+                        }
                     }
                 }
-                $logo = BASE_URL . '/uploads/tv-logos/' . $file_name;
+                $logo = 'uploads/tv-logos/' . $file_name;
             }
         }
     }
+    
+    $logo = normalizeUploadPath($logo);
     
     // Handle sources - IMPORTANT: Make sure type is properly saved
     // For embed-style types we must NOT strip HTML tags, so full embed code is stored

@@ -463,7 +463,7 @@ include 'includes/header.php';
                class="live-tv-channel-card <?php echo (($channel['is_premium'] ?? 0) == 1) ? 'premium' : 'free'; ?>">
                 <div class="live-tv-channel-logo">
                     <?php if (!empty($channel['logo'])): ?>
-                    <img src="<?php echo htmlspecialchars($channel['logo']); ?>" 
+                    <img src="<?php echo htmlspecialchars(assetUrl($channel['logo'])); ?>" 
                          alt="<?php echo htmlspecialchars($channel['name']); ?>"
                          onerror="this.style.display='none'">
                     <?php else: ?>
@@ -599,7 +599,7 @@ include 'includes/header.php';
                        class="live-tv-channel-card <?php echo (($channel['is_premium'] ?? 0) == 1) ? 'premium' : 'free'; ?>">
                         <div class="live-tv-channel-logo">
                             <?php if (!empty($channel['logo'])): ?>
-                                <img src="<?php echo htmlspecialchars($channel['logo']); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" onerror="this.style.display='none'">
+                                <img src="<?php echo htmlspecialchars(assetUrl($channel['logo'])); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" onerror="this.style.display='none'">
                             <?php else: ?>
                                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">
                                     <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>

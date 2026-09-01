@@ -3,11 +3,12 @@
  * Admin Panel - Search & Check Streams by Category
  * - Filter channels by category
  * - Start a background scan (with progress) that checks HLS/M3U8 and DASH sources
- * - Uses existing api/check-stream-links.php with category + type filters
+ * - Uses existing apiUrl('admin/api/check-stream-links.php') with category + type filters
  */
 
 $page_title = "Search & Check Streams";
 
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/includes/functions.php';
 
@@ -341,7 +342,7 @@ if ($selected_category !== '' || $search_query !== '') {
         function pollScan() {
             if (!isScanning) return;
 
-            fetch('api/check-stream-links.php?action=check&batch=20')
+            fetch('<?php echo apiUrl('admin/api/check-stream-links.php'); ?>?action=check&batch=20')
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success) {
@@ -441,7 +442,7 @@ if ($selected_category !== '' || $search_query !== '') {
             statusText.textContent = 'Starting scan...';
             progressContainer.classList.remove('hidden');
 
-            fetch('api/check-stream-links.php', {
+            fetch('<?php echo apiUrl('admin/api/check-stream-links.php'); ?>', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -474,7 +475,7 @@ if ($selected_category !== '' || $search_query !== '') {
         }
 
         function pauseScan() {
-            fetch('api/check-stream-links.php?action=pause')
+            fetch('<?php echo apiUrl('admin/api/check-stream-links.php'); ?>?action=pause')
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
@@ -488,7 +489,7 @@ if ($selected_category !== '' || $search_query !== '') {
         }
 
         function resumeScan() {
-            fetch('api/check-stream-links.php?action=resume')
+            fetch('<?php echo apiUrl('admin/api/check-stream-links.php'); ?>?action=resume')
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
@@ -511,7 +512,7 @@ if ($selected_category !== '' || $search_query !== '') {
                 return;
             }
 
-            fetch('api/check-stream-links.php?action=stop', { method: 'POST' })
+            fetch('<?php echo apiUrl('admin/api/check-stream-links.php'); ?>?action=stop', { method: 'POST' })
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {

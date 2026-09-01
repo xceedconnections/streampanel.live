@@ -17,25 +17,16 @@ $error = '';
 $preview = '';
 $htaccess_path = __DIR__ . '/../.htaccess';
 
-// Get BASE_URL from database
+$base_path = APP_BASE_PATH;
 $base_url = BASE_URL;
-
-// Extract path from BASE_URL
-$parsed_url = parse_url($base_url);
-$base_path = isset($parsed_url['path']) ? rtrim($parsed_url['path'], '/') : '';
-if (empty($base_path) || $base_path === '/') {
-    $base_path = '';
-    $rewrite_base = '/';
-} else {
-    $rewrite_base = $base_path . '/';
-}
+$rewrite_base = ($base_path === '') ? '/' : $base_path . '/';
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['generate']) || isset($_POST['action']))) {
     $action = $_POST['action'] ?? 'preview';
     
     // Generate .htaccess content
-    $htaccess_content = generateHtaccessContent($rewrite_base, $base_path);
+    $htaccess_content = generateHtaccessContent($base_path);
     
     if ($action === 'write') {
         // Write to file
@@ -56,123 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['generate']) || isset
 
 // Generate preview on page load if no action
 if (empty($preview) && empty($message) && empty($error)) {
-    $preview = generateHtaccessContent($rewrite_base, $base_path);
-}
-
-/**
- * Generate .htaccess content based on base path
- */
-function generateHtaccessContent($rewrite_base, $base_path) {
-    // Escape base_path for use in regex patterns
-    $base_path_escaped = preg_quote($base_path, '#');
-    
-    $content = "RewriteEngine On\n";
-    $content .= "RewriteBase {$rewrite_base}\n";
-    $content .= "\n";
-    
-    // Handle API endpoints
-    if (!empty($base_path)) {
-        $content .= "# IMPORTANT: Handle API endpoints FIRST - rewrite requests without .php back to .php\n";
-        $content .= "# This must be before the redirect rule to prevent .php from being stripped\n";
-        $content .= "RewriteCond %{REQUEST_URI} ^{$base_path_escaped}/tv/api/viewer_tracker(\\?.*)?\$ [NC]\n";
-        $content .= "RewriteCond %{REQUEST_FILENAME} !-f\n";
-        $content .= "RewriteRule ^{$base_path_escaped}/tv/api/viewer_tracker\$ tv/api/viewer_tracker.php [L,QSA]\n";
-        $content .= "\n";
-        
-        $content .= "# Allow API endpoints with .php extension to work directly\n";
-        $content .= "RewriteCond %{REQUEST_URI} ^{$base_path_escaped}/tv/api/.*\\.php [NC]\n";
-        $content .= "RewriteCond %{REQUEST_FILENAME} -f\n";
-        $content .= "RewriteRule ^ - [L]\n";
-        $content .= "\n";
-        
-        $content .= "# Allow diagnostic/utility scripts with .php extension to work directly\n";
-        $content .= "RewriteCond %{REQUEST_URI} ^{$base_path_escaped}/(fix_user_login_check|_db_check|reset_admin_password)\\.php [NC]\n";
-        $content .= "RewriteCond %{REQUEST_FILENAME} -f\n";
-        $content .= "RewriteRule ^ - [L]\n";
-        $content .= "\n";
-        
-        $content .= "# Redirect old .php URLs to clean URLs (301 permanent redirect)\n";
-        $content .= "# But exclude API endpoints, admin panel, and diagnostic scripts - check THE_REQUEST to see original URL\n";
-        $content .= "RewriteCond %{THE_REQUEST} \\s{$base_path_escaped}/([^?\\s]*?)\\.php[\\s?] [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s{$base_path_escaped}/tv/api/viewer_tracker [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s{$base_path_escaped}/admin/ [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s{$base_path_escaped}/api/ [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s{$base_path_escaped}/fix_user_login_check\\.php [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s{$base_path_escaped}/_db_check\\.php [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s{$base_path_escaped}/reset_admin_password\\.php [NC]\n";
-        $content .= "RewriteRule ^ %1? [R=301,L]\n";
-        $content .= "\n";
-        
-        $content .= "# Handle root URL (index.php)\n";
-        $content .= "RewriteRule ^\$ index.php [L]\n";
-        $content .= "\n";
-        
-        $content .= "# Redirect /tv/{slug} to tv-channel.php with slug parameter (before other rules)\n";
-        $content .= "RewriteRule ^tv/([a-z0-9-]+)/?\$ tv/tv-channel.php?slug=\$1 [L,QSA]\n";
-        $content .= "\n";
-        
-        $content .= "# Handle clean URLs without .php extension\n";
-        $content .= "RewriteCond %{REQUEST_FILENAME} !-f\n";
-        $content .= "RewriteCond %{REQUEST_FILENAME} !-d\n";
-        $content .= "RewriteRule ^(live-tv|movies|tv-shows|profile|login|register|watch|manage-devices|tv-show-detail|report|logout|search)\$ \$1.php [L,QSA]\n";
-    } else {
-        // Root installation (no base path)
-        $content .= "# IMPORTANT: Handle API endpoints FIRST - rewrite requests without .php back to .php\n";
-        $content .= "# This must be before the redirect rule to prevent .php from being stripped\n";
-        $content .= "RewriteCond %{REQUEST_URI} ^/tv/api/viewer_tracker(\\?.*)?\$ [NC]\n";
-        $content .= "RewriteCond %{REQUEST_FILENAME} !-f\n";
-        $content .= "RewriteRule ^tv/api/viewer_tracker\$ tv/api/viewer_tracker.php [L,QSA]\n";
-        $content .= "\n";
-        
-        $content .= "# Allow API endpoints with .php extension to work directly\n";
-        $content .= "RewriteCond %{REQUEST_URI} ^/tv/api/.*\\.php [NC]\n";
-        $content .= "RewriteCond %{REQUEST_FILENAME} -f\n";
-        $content .= "RewriteRule ^ - [L]\n";
-        $content .= "\n";
-        
-        $content .= "# Allow diagnostic/utility scripts with .php extension to work directly\n";
-        $content .= "RewriteCond %{REQUEST_URI} ^/(fix_user_login_check|_db_check|reset_admin_password)\\.php [NC]\n";
-        $content .= "RewriteCond %{REQUEST_FILENAME} -f\n";
-        $content .= "RewriteRule ^ - [L]\n";
-        $content .= "\n";
-        
-        $content .= "# Redirect old .php URLs to clean URLs (301 permanent redirect)\n";
-        $content .= "# But exclude API endpoints, admin panel, and diagnostic scripts - check THE_REQUEST to see original URL\n";
-        $content .= "RewriteCond %{THE_REQUEST} \\s/([^?\\s]*?)\\.php[\\s?] [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s/tv/api/viewer_tracker [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s/admin/ [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s/api/ [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s/fix_user_login_check\\.php [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s/_db_check\\.php [NC]\n";
-        $content .= "RewriteCond %{THE_REQUEST} !\\s/reset_admin_password\\.php [NC]\n";
-        $content .= "RewriteRule ^ %1? [R=301,L]\n";
-        $content .= "\n";
-        
-        $content .= "# Handle root URL (index.php)\n";
-        $content .= "RewriteRule ^\$ index.php [L]\n";
-        $content .= "\n";
-        
-        $content .= "# Redirect /tv/{slug} to tv-channel.php with slug parameter (before other rules)\n";
-        $content .= "RewriteRule ^tv/([a-z0-9-]+)/?\$ tv/tv-channel.php?slug=\$1 [L,QSA]\n";
-        $content .= "\n";
-        
-        $content .= "# Handle clean URLs without .php extension\n";
-        $content .= "RewriteCond %{REQUEST_FILENAME} !-f\n";
-        $content .= "RewriteCond %{REQUEST_FILENAME} !-d\n";
-        $content .= "RewriteRule ^(live-tv|movies|tv-shows|profile|login|register|watch|manage-devices|tv-show-detail|report|logout|search)\$ \$1.php [L,QSA]\n";
-    }
-    
-    $content .= "\n";
-    $content .= "# Prevent directory listing\n";
-    $content .= "Options -Indexes\n";
-    $content .= "\n";
-    $content .= "# Protect sensitive files\n";
-    $content .= "<FilesMatch \"\\.(sql|md|log)\$\">\n";
-    $content .= "    Order allow,deny\n";
-    $content .= "    Deny from all\n";
-    $content .= "</FilesMatch>\n";
-    
-    return $content;
+    $preview = generateHtaccessContent($base_path);
 }
 
 $page_title = "Generate .htaccess";

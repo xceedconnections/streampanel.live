@@ -236,7 +236,7 @@ include 'includes/header.php';
         // No login redirect needed - listing page is always accessible
         ?>
         <a href="<?php echo $show_url; ?>" class="movie-card-page">
-            <img src="<?php echo htmlspecialchars($show['poster'] ?? FALLBACK_POSTER); ?>" 
+            <img src="<?php echo htmlspecialchars(assetUrl($show['poster'] ?? '') ?: FALLBACK_POSTER); ?>" 
                  alt="<?php echo htmlspecialchars($show['title']); ?>" 
                  loading="lazy"
                  onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">

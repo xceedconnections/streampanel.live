@@ -11,9 +11,9 @@ require_once __DIR__ . '/includes/functions.php';
 requireAdminLogin();
 
 $conn = getDBConnection();
-$tab = $_GET['tab'] ?? 'dashboard';
+$tab = $_GET['tab'] ?? $_POST['tab'] ?? 'dashboard';
 $validTabs = [
-    'dashboard', 'movies', 'tv-shows', 'live-tv', 'edit-channel', 'categories',
+    'dashboard', 'movies', 'edit-movie', 'tv-shows', 'live-tv', 'edit-channel', 'categories',
     'users', 'reports', 'user-messages', 'coupons', 'ads', 'sliders', 'settings',
     'import', 'iptv', 'links', 'bulk-fetch', 'episodes', 'countdown',
     'tools', 'match-replace', 'import-sql',
@@ -1201,6 +1201,8 @@ $stats = getAdminStats($conn);
             $tabFile = __DIR__ . '/tv-shows.php';
         } elseif ($tab === 'live-tv') {
             $tabFile = __DIR__ . '/live-tv.php';
+        } elseif ($tab === 'edit-movie') {
+            $tabFile = __DIR__ . '/edit-movie.php';
         } elseif ($tab === 'user-messages') {
             $tabFile = __DIR__ . '/user-messages.php';
         } elseif ($tab === 'bulk-fetch') {

@@ -3,6 +3,7 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
+require_once __DIR__ . '/includes/movie_helpers.php';
 
 $page_title = "Home";
 $conn = getDBConnection();
@@ -32,60 +33,26 @@ if ($enabled_sections_count === 1) {
     }
 }
 
-// Check if login is required for Movies
-$login_required_movies = '0';
-$movies_login_required = false;
-if ($enable_movies) {
-    try {
-        $setting_result = getSetting($conn, 'login_required_movies', '0');
-        if ($setting_result !== false && $setting_result !== null) {
-            $login_required_movies = $setting_result;
-        } else {
-            $direct_query = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'login_required_movies' LIMIT 1");
-            if ($direct_query && $direct_query->num_rows > 0) {
-                $row = $direct_query->fetch_assoc();
-                $login_required_movies = $row['setting_value'] ?? '0';
-            }
-        }
-    } catch (Exception $e) {
-        $login_required_movies = '0';
-    }
-    
-    if (is_string($login_required_movies)) {
-        $login_required_movies = trim($login_required_movies);
-        $movies_login_required = ($login_required_movies === '1' || $login_required_movies === 'true' || $login_required_movies === 'yes');
-    } else {
-        $movies_login_required = ($login_required_movies === 1 || $login_required_movies === true);
-    }
-    
-    if (empty($login_required_movies) || $login_required_movies === '0' || $login_required_movies === 0 || $login_required_movies === false || $login_required_movies === null) {
-        $movies_login_required = false;
-    }
-}
-
-// Get featured movies (only if enabled and login not required OR user is logged in)
+// Featured and popular movies are always shown when the section is enabled.
 $featured_movies = [];
 $all_movies = [];
 $popular_movies = [];
 $heroMovie = null;
 $heroImage = '';
 
-if ($enable_movies && (!$movies_login_required || isLoggedIn())) {
-    $featured_movies = $conn->query("SELECT * FROM movies WHERE featured = 1 ORDER BY rating DESC LIMIT 10")->fetch_all(MYSQLI_ASSOC);
-    
-    // Get all movies for popular section
-    $all_movies = $conn->query("SELECT * FROM movies ORDER BY views DESC, created_at DESC LIMIT 20")->fetch_all(MYSQLI_ASSOC);
-    $popular_movies = array_filter($all_movies, function($m) {
+if ($enable_movies) {
+    $featured_movies = $conn->query("SELECT * FROM movies WHERE featured = 1 AND (is_active = 1 OR is_active IS NULL) ORDER BY rating DESC LIMIT 10")->fetch_all(MYSQLI_ASSOC);
+
+    $all_movies = $conn->query("SELECT * FROM movies WHERE (is_active = 1 OR is_active IS NULL) ORDER BY views DESC, created_at DESC LIMIT 20")->fetch_all(MYSQLI_ASSOC);
+    $popular_movies = array_filter($all_movies, function ($m) {
         return !($m['featured'] ?? false);
     });
     $popular_movies = array_slice($popular_movies, 0, 10);
-    
-    // Hero: only show when a movie is marked as featured (no fallback to popular)
+
     $heroMovie = !empty($featured_movies) ? $featured_movies[0] : null;
-    
-    // Get hero image URL
+
     if ($heroMovie) {
-        $heroImage = htmlspecialchars($heroMovie['poster'] ?? $heroMovie['thumbnail'] ?? '');
+        $heroImage = htmlspecialchars(movieBackdropUrl($heroMovie));
     }
 }
 
@@ -127,46 +94,56 @@ include 'includes/header.php';
     min-height: 100vh;
     background: #000;
     color: #fff;
+    overflow-x: hidden;
 }
 
-/* Hero Section - Netflix Style */
-.hero-section {
+/* Hero Section - full-bleed cinematic banner */
+.home-page .hero-section {
     position: relative;
-    height: 70vh;
-    width: 100%;
+    width: 100vw;
+    max-width: 100vw;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+    min-height: 72vh;
     display: flex;
     align-items: flex-end;
-    padding: 0 1rem 4rem;
+    padding: 0 1.25rem 3.5rem;
     overflow: hidden;
-    margin-bottom: 2rem;
+    margin-bottom: 0;
+    background: #000;
 }
-@media (min-width: 640px) {
-    .hero-section {
-        height: 85vh;
+@media (min-width: 768px) {
+    .home-page .hero-section {
+        min-height: 82vh;
         padding: 0 3rem 5rem;
     }
 }
-@media (min-width: 768px) {
-    .hero-section {
-        padding: 0 3rem 8rem;
-    }
+.home-page .hero-bg-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 15%;
+    z-index: 0;
 }
-.hero-section::before {
+.home-page .hero-section::before {
     content: '';
     position: absolute;
     inset: 0;
-    background-image: url('<?php echo $heroImage; ?>');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    background: linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0.2) 100%);
+    z-index: 1;
 }
-.hero-section::after {
+.home-page .hero-section::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(to top, rgba(0,0,0,1), rgba(0,0,0,0.4), transparent);
+    background: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.65) 35%, transparent 70%);
+    z-index: 2;
 }
-.hero-content {
+.home-page .hero-content {
     position: relative;
     z-index: 10;
     max-width: 42rem;
@@ -175,12 +152,7 @@ include 'includes/header.php';
     gap: 0.75rem;
 }
 @media (min-width: 640px) {
-    .hero-content {
-        gap: 1rem;
-    }
-}
-@media (min-width: 768px) {
-    .hero-content {
+    .home-page .hero-content {
         gap: 1rem;
     }
 }
@@ -325,7 +297,7 @@ include 'includes/header.php';
 
 /* Content Rows */
 .content-rows {
-    margin-top: -8rem;
+    margin-top: -4rem;
     position: relative;
     z-index: 20;
     display: flex;
@@ -335,7 +307,7 @@ include 'includes/header.php';
 }
 @media (min-width: 768px) {
     .content-rows {
-        margin-top: -8rem;
+        margin-top: -6rem;
     }
 }
 /* When a slider is present above, avoid overlapping it */
@@ -435,6 +407,7 @@ include 'includes/header.php';
     transition: transform 0.3s;
     box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
     z-index: 10;
+    background: #1a1a1a;
 }
 @media (min-width: 768px) {
     .movie-card {
@@ -450,27 +423,60 @@ include 'includes/header.php';
     height: 100%;
     object-fit: cover;
 }
-.movie-card-overlay {
+.movie-card-badges {
     position: absolute;
-    inset: 0;
-    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent, transparent);
-    opacity: 0;
-    transition: opacity 0.2s;
+    top: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
     display: flex;
-    align-items: flex-end;
-    padding: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    z-index: 10;
+    pointer-events: none;
 }
-.movie-card:hover .movie-card-overlay {
-    opacity: 1;
+.movie-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.2rem;
+    text-transform: uppercase;
+    line-height: 1.2;
 }
-.movie-card-overlay p {
+.movie-badge-quality {
+    background: #e50914;
+    color: #fff;
+}
+.movie-badge-tag {
+    background: rgba(0,0,0,0.75);
+    color: #fbbf24;
+    border: 1px solid rgba(251,191,36,0.4);
+}
+.movie-card-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.5rem;
+    background: linear-gradient(to top, rgba(0,0,0,0.95) 70%, transparent);
+    z-index: 5;
+    pointer-events: none;
+}
+.movie-card-info h3 {
     font-size: 0.75rem;
-    font-weight: 500;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    width: 100%;
     color: #fff;
+    margin: 0;
+}
+.movie-card-info .meta {
+    font-size: 0.65rem;
+    color: #9ca3af;
+    margin-top: 0.15rem;
+}
+.movie-card-overlay {
+    display: none;
 }
 
 /* TV Show cards on home (use 16:9 and contain so YouTube-style banners are not cropped) */
@@ -726,7 +732,16 @@ include 'includes/header.php';
 <div class="home-page animate-in fade-in" style="animation: fadeIn 0.7s ease-out;">
     <!-- Hero Section -->
     <?php if ($heroMovie): ?>
+        <?php
+        $heroAccess = getMovieAccess($conn, $heroMovie);
+        $heroPlayUrl = resolveMovieWatchHref($heroMovie, $heroAccess, 0, $conn);
+        $heroPlayLabel = 'Play';
+        if (!$heroAccess['allowed']) {
+            $heroPlayLabel = $heroAccess['reason'] === 'login' ? 'Sign In to Play' : 'Premium Required';
+        }
+        ?>
         <div class="hero-section">
+            <img src="<?php echo $heroImage; ?>" alt="<?php echo htmlspecialchars($heroMovie['title']); ?>" class="hero-bg-image" onerror="this.style.display='none'">
             <div class="hero-content">
                 <div class="hero-badge">
                     <svg viewBox="0 0 24 24" fill="currentColor">
@@ -737,13 +752,13 @@ include 'includes/header.php';
                 <h1 class="hero-title"><?php echo htmlspecialchars($heroMovie['title']); ?></h1>
                 <p class="hero-description"><?php echo htmlspecialchars($heroMovie['description'] ?? ''); ?></p>
                 <div class="hero-actions">
-                    <a href="<?php echo isLoggedIn() ? 'watch.php?type=movie&id=' . $heroMovie['id'] : 'login.php'; ?>" class="btn-play-hero">
+                    <a href="<?php echo htmlspecialchars($heroPlayUrl); ?>" class="btn-play-hero">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="black" style="display: inline-block;">
                             <polygon points="5 3 19 12 5 21 5 3"></polygon>
                         </svg>
-                        <?php echo isLoggedIn() ? 'Play' : 'Sign In to Play'; ?>
+                        <?php echo htmlspecialchars($heroPlayLabel); ?>
                     </a>
-                    <a href="/movies" class="btn-info-hero">
+                    <a href="<?php echo htmlspecialchars(getMovieDetailUrl($heroMovie, $conn)); ?>" class="btn-info-hero">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block;">
                             <circle cx="12" cy="12" r="10"></circle>
                             <line x1="12" y1="16" x2="12" y2="12"></line>
@@ -776,18 +791,28 @@ include 'includes/header.php';
                     </button>
                     <div class="movie-row-scroll" data-row="featured">
                         <?php foreach ($featured_movies as $movie): ?>
-                            <div class="movie-card" onclick="checkLoginAndPlay('watch.php?type=movie&id=<?php echo $movie['id']; ?>')">
-                                <img src="<?php echo htmlspecialchars($movie['thumbnail'] ?? $movie['poster'] ?? FALLBACK_POSTER); ?>" 
+                            <?php
+                            $movieAccess = getMovieAccess($conn, $movie);
+                            $moviePlayUrl = resolveMovieWatchHref($movie, $movieAccess, 0, $conn);
+                            ?>
+                            <div class="movie-card" onclick="window.location.href='<?php echo htmlspecialchars($moviePlayUrl, ENT_QUOTES); ?>'">
+                                <?php renderMoviePosterBadges($movie); ?>
+                                <img src="<?php echo htmlspecialchars(moviePosterUrl($movie)); ?>" 
                                      alt="<?php echo htmlspecialchars($movie['title']); ?>" 
                                      loading="lazy"
                                      onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
-                                <div class="movie-card-overlay">
-                                    <p><?php echo htmlspecialchars($movie['title']); ?></p>
-                                    <?php if (!isLoggedIn()): ?>
-                                    <div class="mt-2 text-xs text-yellow-300">
-                                        <i class="fas fa-lock mr-1"></i>Login to watch
+                                <div class="movie-card-info">
+                                    <h3><?php echo htmlspecialchars($movie['title']); ?></h3>
+                                    <div class="meta">
+                                        <?php if (!empty($movie['release_year'])): ?>
+                                        <span><?php echo (int) $movie['release_year']; ?></span>
+                                        <?php endif; ?>
+                                        <?php if (!$movieAccess['allowed'] && $movieAccess['reason'] === 'login'): ?>
+                                        <span><i class="fas fa-lock"></i> Login</span>
+                                        <?php elseif (!$movieAccess['allowed'] && $movieAccess['reason'] === 'premium'): ?>
+                                        <span><i class="fas fa-crown"></i> Premium</span>
+                                        <?php endif; ?>
                                     </div>
-                                    <?php endif; ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -813,18 +838,28 @@ include 'includes/header.php';
                     </button>
                     <div class="movie-row-scroll" data-row="popular">
                         <?php foreach ($popular_movies as $movie): ?>
-                            <div class="movie-card" onclick="checkLoginAndPlay('watch.php?type=movie&id=<?php echo $movie['id']; ?>')">
-                                <img src="<?php echo htmlspecialchars($movie['thumbnail'] ?? $movie['poster'] ?? FALLBACK_POSTER); ?>" 
+                            <?php
+                            $movieAccess = getMovieAccess($conn, $movie);
+                            $moviePlayUrl = resolveMovieWatchHref($movie, $movieAccess, 0, $conn);
+                            ?>
+                            <div class="movie-card" onclick="window.location.href='<?php echo htmlspecialchars($moviePlayUrl, ENT_QUOTES); ?>'">
+                                <?php renderMoviePosterBadges($movie); ?>
+                                <img src="<?php echo htmlspecialchars(moviePosterUrl($movie)); ?>" 
                                      alt="<?php echo htmlspecialchars($movie['title']); ?>" 
                                      loading="lazy"
                                      onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
-                                <div class="movie-card-overlay">
-                                    <p><?php echo htmlspecialchars($movie['title']); ?></p>
-                                    <?php if (!isLoggedIn()): ?>
-                                    <div class="mt-2 text-xs text-yellow-300">
-                                        <i class="fas fa-lock mr-1"></i>Login to watch
+                                <div class="movie-card-info">
+                                    <h3><?php echo htmlspecialchars($movie['title']); ?></h3>
+                                    <div class="meta">
+                                        <?php if (!empty($movie['release_year'])): ?>
+                                        <span><?php echo (int) $movie['release_year']; ?></span>
+                                        <?php endif; ?>
+                                        <?php if (!$movieAccess['allowed'] && $movieAccess['reason'] === 'login'): ?>
+                                        <span><i class="fas fa-lock"></i> Login</span>
+                                        <?php elseif (!$movieAccess['allowed'] && $movieAccess['reason'] === 'premium'): ?>
+                                        <span><i class="fas fa-crown"></i> Premium</span>
+                                        <?php endif; ?>
                                     </div>
-                                    <?php endif; ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -854,7 +889,7 @@ include 'includes/header.php';
                         $show_url = !empty($show['slug']) ? BASE_URL . '/tv-show/' . htmlspecialchars($show['slug']) : BASE_URL . '/tv-show-detail?id=' . $show['id'];
                         ?>
                         <a href="<?php echo $show_url; ?>" class="tv-show-card-wrap">
-                            <img src="<?php echo htmlspecialchars($show['poster'] ?? FALLBACK_POSTER); ?>" 
+                            <img src="<?php echo htmlspecialchars(assetUrl($show['poster'] ?? '') ?: FALLBACK_POSTER); ?>" 
                                  alt="<?php echo htmlspecialchars($show['title']); ?>" 
                                  class="tv-show-poster"
                                  loading="lazy"
@@ -895,7 +930,7 @@ include 'includes/header.php';
                            class="live-tv-channel-card <?php echo (($channel['is_premium'] ?? 0) == 1) ? 'premium' : 'free'; ?>">
                             <div class="live-tv-channel-logo">
                                 <?php if (!empty($channel['logo'])): ?>
-                                    <img src="<?php echo htmlspecialchars($channel['logo']); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" onerror="this.style.display='none'">
+                                    <img src="<?php echo htmlspecialchars(assetUrl($channel['logo'])); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" onerror="this.style.display='none'">
                                 <?php else: ?>
                                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">
                                         <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
@@ -952,14 +987,6 @@ include 'includes/header.php';
 </div>
 
 <script>
-function checkLoginAndPlay(url) {
-    <?php if (isLoggedIn()): ?>
-    window.location.href = url;
-    <?php else: ?>
-    window.location.href = 'login.php?redirect=' + encodeURIComponent(url);
-    <?php endif; ?>
-}
-
 function slideRow(btn, direction) {
     const container = btn.closest('.movie-row-container');
     const scroll = container.querySelector('.movie-row-scroll');

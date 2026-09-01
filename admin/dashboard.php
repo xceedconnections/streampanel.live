@@ -1,7 +1,13 @@
 <?php
 /**
- * Admin Dashboard
+ * Admin Dashboard (included from index.php?tab=dashboard)
  */
+if (!isset($stats)) {
+    require_once __DIR__ . '/../config/config.php';
+    header('Location: ' . url('admin/index.php?tab=dashboard'));
+    exit;
+}
+
 $page_title = "Dashboard";
 ?>
 <div class="mb-8">

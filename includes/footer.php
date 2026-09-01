@@ -5,7 +5,7 @@
         try {
             require_once __DIR__ . '/../config/config.php';
         } catch (Exception $e) {
-            define('BASE_URL', 'https://streampanel.live');
+            define('BASE_URL', getBaseUrl());
         }
     }
     

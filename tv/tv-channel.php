@@ -65,11 +65,7 @@ if ($login_required === true) {
     // Continue processing the page - users can access even if not logged in
 }
 
-// Normalize BASE_URL - remove /tv if present (since this file is in tv/ directory)
-$BASE_URL_NORMALIZED = rtrim(BASE_URL, '/');
-if (strpos($BASE_URL_NORMALIZED, '/tv') !== false) {
-    $BASE_URL_NORMALIZED = str_replace('/tv', '', $BASE_URL_NORMALIZED);
-}
+// BASE_URL is auto-detected from the install path in config.php
 
 $slug = $_GET['slug'] ?? null;
 $id = $_GET['id'] ?? null;
@@ -89,12 +85,12 @@ if ($id) {
     $stmt = $conn->prepare("SELECT * FROM live_tv_channels WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
-    $channel = $stmt->get_result()->fetch_assoc();
+    $channel = normalizeLiveTvChannel($stmt->get_result()->fetch_assoc());
 } elseif ($slug) {
     $stmt = $conn->prepare("SELECT * FROM live_tv_channels WHERE slug = ?");
     $stmt->bind_param("s", $slug);
     $stmt->execute();
-    $channel = $stmt->get_result()->fetch_assoc();
+    $channel = normalizeLiveTvChannel($stmt->get_result()->fetch_assoc());
 }
 
 if (!$channel) {
@@ -381,14 +377,7 @@ if ($channel) {
     $metaKeywords = "{$channel_name_lower} live, {$channel_name_lower} live stream, watch {$channel_name_lower} online, {$channel_name_lower} tv channel, live {$channel_category} {$channel_name_lower}, {$channel_name_lower} hd, {$channel_name_lower} sports channel, {$channel_name_lower} free streaming, watch {$channel_name_lower} live";
     
     // Channel logo URL for social sharing
-    $channel_logo_url = '';
-    if (!empty($channel['logo'])) {
-        if (strpos($channel['logo'], 'http') === 0) {
-            $channel_logo_url = $channel['logo'];
-        } else {
-            $channel_logo_url = BASE_URL . '/' . ltrim($channel['logo'], '/');
-        }
-    }
+    $channel_logo_url = assetUrl($channel['logo'] ?? '');
     
     // Canonical URL should point to main watch page
     $canonical_url = BASE_URL . '/watch-live-tv/' . ($channel['slug'] ?? 'channel');
@@ -1776,7 +1765,7 @@ if ($channel) {
             <h2><?php echo ($error === 'This channel is not yet active') ? 'Channel Not Active' : 'Channel Not Available'; ?></h2>
             <p><?php echo htmlspecialchars($error ?: 'Channel not found'); ?></p>
             <div class="error-actions">
-                <a href="<?php echo $BASE_URL_NORMALIZED; ?>/live-tv">
+                <a href="<?php echo BASE_URL; ?>/live-tv">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M19 12H5"></path>
                     <path d="m12 19-7-7 7-7"></path>
@@ -1800,7 +1789,7 @@ if ($channel) {
                         </svg>
                     </button>
                     <?php if ($channel['logo']): ?>
-                        <img src="<?php echo htmlspecialchars($channel['logo']); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" class="channel-logo-header">
+                        <img src="<?php echo htmlspecialchars(assetUrl($channel['logo'])); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" class="channel-logo-header">
                     <?php endif; ?>
                     <div class="channel-info-header">
                         <h1><?php echo htmlspecialchars($channel['name']); ?></h1>
@@ -1840,7 +1829,7 @@ if ($channel) {
                     </button>
                     <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 0;">
                         <?php if ($channel['logo']): ?>
-                            <img src="<?php echo htmlspecialchars($channel['logo']); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" class="channel-logo-header">
+                            <img src="<?php echo htmlspecialchars(assetUrl($channel['logo'])); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" class="channel-logo-header">
                         <?php endif; ?>
                         <div class="channel-info-header">
                             <h1><?php echo htmlspecialchars($channel['name']); ?></h1>
@@ -1983,16 +1972,7 @@ if ($channel) {
                     
                     $iframe_url = $is_iframe_source && !empty($selected_source['url']) ? htmlspecialchars($selected_source['url'], ENT_QUOTES, 'UTF-8') : '';
                     
-                    // Use BASE_URL (not normalized) for embed-source.php since it's in root directory
-                    // Ensure absolute URL for Android/Firefox compatibility
-                    $base_url_clean = rtrim(BASE_URL, '/');
-                    // Ensure protocol is included (Android browsers are strict about this)
-                    if (!preg_match('/^https?:\/\//', $base_url_clean)) {
-                        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-                        $base_url_clean = $protocol . ltrim($base_url_clean, '/');
-                    }
-                    // Build URL with properly encoded query string (Firefox is strict about this)
-                    $embed_source_url = $base_url_clean . '/embed-source.php?' . http_build_query($query_params, '', '&', PHP_QUERY_RFC3986);
+                    $embed_source_url = url('embed-source.php?' . http_build_query($query_params, '', '&', PHP_QUERY_RFC3986));
                 ?>
                 <video id="videoPlayer" class="video-player" controls autoplay playsinline muted style="<?php echo $is_iframe_or_embed ? 'display: none;' : ''; ?>"></video>
                 <iframe id="youtubePlayer" class="video-player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="display: none;"></iframe>
@@ -2177,7 +2157,7 @@ if ($channel) {
                            class="suggested-channel-card <?php echo $is_premium ? 'premium' : 'free'; ?>">
                             <div class="suggested-channel-logo">
                                 <?php if (!empty($suggested_channel['logo'])): ?>
-                                    <img src="<?php echo htmlspecialchars($suggested_channel['logo']); ?>" 
+                                    <img src="<?php echo htmlspecialchars(assetUrl($suggested_channel['logo'])); ?>" 
                                          alt="<?php echo htmlspecialchars($suggested_channel['name']); ?>" 
                                          onerror="this.style.display='none'">
                                 <?php else: ?>
@@ -2289,7 +2269,7 @@ if ($channel) {
                 const iconDesktop = document.getElementById('favoriteIconDesktop');
                 
                 // Use normalized BASE_URL (without /tv) for API calls
-                const response = await fetch(`<?php echo $BASE_URL_NORMALIZED; ?>/api/favorites.php?content_type=${contentType}&content_id=${contentId}`);
+                const response = await fetch(`<?php echo apiUrl('api/favorites.php'); ?>?content_type=${contentType}&content_id=${contentId}`);
                 const data = await response.json();
                 
                 if (data.success && data.is_favorite) {
@@ -2308,7 +2288,7 @@ if ($channel) {
             
             try {
                 // Use normalized BASE_URL (without /tv) for API calls
-                const url = `<?php echo $BASE_URL_NORMALIZED; ?>/api/favorites.php`;
+                const url = `<?php echo apiUrl('api/favorites.php'); ?>`;
                 const method = isFavorite ? 'DELETE' : 'POST';
                 const response = await fetch(url, {
                     method: method,
@@ -2383,9 +2363,14 @@ if ($channel) {
         
         // Get API base URL - use BASE_URL from PHP (database settings)
         const BASE_URL_JS = <?php echo json_encode(rtrim(BASE_URL, '/')); ?>;
+        const FAVORITES_API = <?php echo json_encode(apiUrl('api/favorites.php')); ?>;
+        const TV_VIEWER_API = <?php echo json_encode(apiUrl('tv/api/viewer_tracker.php')); ?>;
+        const HLS_PROXY_URL = <?php echo json_encode(apiUrl('proxy/hls-proxy.php')); ?>;
         const getApiUrl = function(endpoint) {
-            // Use BASE_URL from database settings (site_url)
-            return BASE_URL_JS + '/tv/api/' + endpoint;
+            if (endpoint.includes('viewer_tracker')) {
+                return TV_VIEWER_API;
+            }
+            return BASE_URL_JS + '/api/' + endpoint.replace(/^\//, '');
         };
         
         // Detect mobile/Android TV devices
@@ -2454,7 +2439,7 @@ if ($channel) {
                 if (!originalUrl) return originalUrl;
                 if (window.location.protocol === 'https:' && /^http:\/\//i.test(originalUrl)) {
                     const encoded = btoa(originalUrl);
-                    return `${window.location.origin}/proxy/hls-proxy.php?u=${encodeURIComponent(encoded)}`;
+                    return `${HLS_PROXY_URL}?u=${encodeURIComponent(encoded)}`;
                 }
             } catch (e) {
                 console.warn('[TV Channel] Failed to build proxied URL, using original:', e);
@@ -2581,9 +2566,9 @@ if ($channel) {
                 // Fix path - use normalized BASE_URL (without /tv)
                 let adPath = ad.logo;
                 if (adPath.startsWith('uploads/')) {
-                    adPath = '<?php echo $BASE_URL_NORMALIZED; ?>/' + adPath;
+                    adPath = '<?php echo BASE_URL; ?>/' + adPath;
                 } else if (!adPath.startsWith('http')) {
-                    adPath = '<?php echo $BASE_URL_NORMALIZED; ?>/' + adPath;
+                    adPath = '<?php echo BASE_URL; ?>/' + adPath;
                 }
                 console.log('[TV Channel] Loading ad image from:', adPath);
                 img.src = adPath;
@@ -2612,9 +2597,9 @@ if ($channel) {
                 // Fix path - use normalized BASE_URL (without /tv)
                 let adPath = ad.logo;
                 if (adPath.startsWith('uploads/')) {
-                    adPath = '<?php echo $BASE_URL_NORMALIZED; ?>/' + adPath;
+                    adPath = '<?php echo BASE_URL; ?>/' + adPath;
                 } else if (!adPath.startsWith('http')) {
-                    adPath = '<?php echo $BASE_URL_NORMALIZED; ?>/' + adPath;
+                    adPath = '<?php echo BASE_URL; ?>/' + adPath;
                 }
                 console.log('[TV Channel] Loading ad video from:', adPath);
                 video.src = adPath;
@@ -2968,9 +2953,9 @@ if ($channel) {
                 const img = document.createElement('img');
                 let adPath = ad.logo;
                 if (adPath.startsWith('uploads/')) {
-                    adPath = '<?php echo $BASE_URL_NORMALIZED; ?>/' + adPath;
+                    adPath = '<?php echo BASE_URL; ?>/' + adPath;
                 } else if (!adPath.startsWith('http')) {
-                    adPath = '<?php echo $BASE_URL_NORMALIZED; ?>/' + adPath;
+                    adPath = '<?php echo BASE_URL; ?>/' + adPath;
                 }
                 img.src = adPath;
                 img.style.cssText = 'max-width: 100%; max-height: 130px; object-fit: contain; display: block;';
@@ -3799,7 +3784,7 @@ if ($channel) {
         
         // Back to Live TV
         function handleBackToLiveTV() {
-            window.location.href = '<?php echo $BASE_URL_NORMALIZED; ?>/live-tv';
+            window.location.href = '<?php echo BASE_URL; ?>/live-tv';
         }
         
         // Fullscreen toggle

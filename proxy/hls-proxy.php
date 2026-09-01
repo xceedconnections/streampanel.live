@@ -8,6 +8,8 @@
  * IMPORTANT: This is restricted to http/https URLs only.
  */
 
+require_once __DIR__ . '/../config/config.php';
+
 // Increase timeouts for slow streams
 set_time_limit(60);
 
@@ -145,7 +147,7 @@ foreach ($lines as $line) {
 
     // Treat as URI line
     $resolved = resolve_url($baseRoot, $dir, $trim);
-    $proxied = '/proxy/hls-proxy.php?u=' . urlencode(base64_encode($resolved));
+    $proxied = proxyUrl(urlencode(base64_encode($resolved)));
     echo $proxied . "\n";
 }
 

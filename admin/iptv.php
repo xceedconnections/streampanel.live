@@ -324,7 +324,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
                 
                 try {
                     // Extract data (case-insensitive column matching)
-                    $channel_name = trim($row['channel name'] ?? $row['channel_name'] ?? $row['name'] ?? '');
+                    $channel_name = normalizeDisplayText(trim($row['channel name'] ?? $row['channel_name'] ?? $row['name'] ?? ''));
                     $country = trim($row['country'] ?? 'US');
                     $category = trim($row['category'] ?? '');
                     $description = trim($row['description'] ?? '');
@@ -346,7 +346,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
                     if (!empty($logo_url)) {
                         $logo_path = downloadImageFromUrl($logo_url, $upload_dir);
                         if ($logo_path) {
-                            $logo_path = BASE_URL . '/' . $logo_path;
+                            $logo_path = normalizeUploadPath($logo_path);
                         }
                     }
                     
@@ -678,7 +678,7 @@ document.getElementById('excelUploadForm').addEventListener('submit', function(e
     uploadStatus.textContent = 'Uploading file...';
     
     // Upload file first
-    fetch('<?php echo BASE_URL; ?>/admin/api/iptv-import.php?action=upload', {
+    fetch('<?php echo apiUrl('admin/api/iptv-import.php'); ?>?action=upload', {
         method: 'POST',
         body: formData
     })
@@ -722,7 +722,7 @@ function startBatchProcessing() {
     processingInterval = setInterval(() => {
         if (!isProcessing) return;
         
-        fetch('<?php echo BASE_URL; ?>/admin/api/iptv-import.php?action=process', {
+        fetch('<?php echo apiUrl('admin/api/iptv-import.php'); ?>?action=process', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -820,7 +820,7 @@ function updateProgress(prog) {
 
 // Pause button
 document.getElementById('pauseImportBtn').addEventListener('click', function() {
-    fetch('<?php echo BASE_URL; ?>/admin/api/iptv-import.php?action=pause', {
+    fetch('<?php echo apiUrl('admin/api/iptv-import.php'); ?>?action=pause', {
         method: 'POST'
     })
     .then(response => response.json())
@@ -835,7 +835,7 @@ document.getElementById('pauseImportBtn').addEventListener('click', function() {
 
 // Resume button
 document.getElementById('resumeImportBtn').addEventListener('click', function() {
-    fetch('<?php echo BASE_URL; ?>/admin/api/iptv-import.php?action=resume', {
+    fetch('<?php echo apiUrl('admin/api/iptv-import.php'); ?>?action=resume', {
         method: 'POST'
     })
     .then(response => response.json())
@@ -870,7 +870,7 @@ document.getElementById('stopImportBtn').addEventListener('click', function() {
         uploadStatus.className = 'mt-2 text-sm text-yellow-400 font-semibold';
         
         // Send stop signal to backend
-        fetch('<?php echo BASE_URL; ?>/admin/api/iptv-import.php?action=stop', {
+        fetch('<?php echo apiUrl('admin/api/iptv-import.php'); ?>?action=stop', {
             method: 'POST'
         })
         .then(response => response.json())
@@ -928,7 +928,7 @@ function startStreamCheck() {
     params.set('action', 'start');
     params.set('types', types.join(','));
 
-    fetch('api/check-stream-links.php?' + params.toString())
+    fetch('<?php echo apiUrl('admin/api/check-stream-links.php'); ?>?' + params.toString())
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -950,7 +950,7 @@ function checkStreamLinks() {
     if (!isChecking) return;
     
     // Check 20 stream links at a time when removing dead streams
-    fetch('api/check-stream-links.php?action=check&batch=20')
+    fetch('<?php echo apiUrl('admin/api/check-stream-links.php'); ?>?action=check&batch=20')
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -1017,7 +1017,7 @@ function updateCheckProgress(data) {
 }
 
 function pauseStreamCheck() {
-    fetch('api/check-stream-links.php?action=pause')
+    fetch('<?php echo apiUrl('admin/api/check-stream-links.php'); ?>?action=pause')
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -1029,7 +1029,7 @@ function pauseStreamCheck() {
 }
 
 function resumeStreamCheck() {
-    fetch('api/check-stream-links.php?action=resume')
+    fetch('<?php echo apiUrl('admin/api/check-stream-links.php'); ?>?action=resume')
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -1044,7 +1044,7 @@ function resumeStreamCheck() {
 // Check if there's an ongoing import or scan on page load
 window.addEventListener('load', function() {
     // Check for ongoing IPTV import
-    fetch('<?php echo BASE_URL; ?>/admin/api/iptv-import.php?action=progress')
+    fetch('<?php echo apiUrl('admin/api/iptv-import.php'); ?>?action=progress')
         .then(response => response.json())
         .then(data => {
             if (data.success && data.progress && data.progress.status === 'processing') {
@@ -1068,7 +1068,7 @@ window.addEventListener('load', function() {
         .catch(error => console.error('Error checking import status:', error));
     
     // Check for ongoing stream link scan
-    fetch('api/check-stream-links.php?action=status')
+    fetch('<?php echo apiUrl('admin/api/check-stream-links.php'); ?>?action=status')
         .then(response => response.json())
         .then(data => {
             if (data.success && !data.completed) {
@@ -1095,7 +1095,7 @@ function stopStreamCheck() {
 
     isChecking = false;
 
-    fetch('api/check-stream-links.php?action=stop', {
+    fetch('<?php echo apiUrl('admin/api/check-stream-links.php'); ?>?action=stop', {
         method: 'POST'
     })
         .then(response => response.json())

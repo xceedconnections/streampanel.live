@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         @unlink($old_file_path);
                     }
                 }
-                $poster = BASE_URL . '/uploads/tv-show-logos/' . $file_name;
+                $poster = 'uploads/tv-show-logos/' . $file_name;
             }
         }
     }
@@ -177,7 +177,7 @@ include 'includes/header.php';
                             <div class="space-y-2">
                                 <?php if (!empty($show['poster'])): ?>
                                 <div class="mb-2">
-                                    <img src="<?php echo htmlspecialchars($show['poster']); ?>" alt="Current Banner"
+                                    <img src="<?php echo htmlspecialchars(assetUrl($show['poster'] ?? '')); ?>" alt="Current Banner"
                                          class="max-w-xs max-h-40 object-cover bg-gray-800 rounded"
                                          onerror="this.style.display='none'">
                                 </div>

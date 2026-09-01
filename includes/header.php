@@ -120,6 +120,30 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <?php if (isset($meta_keywords) && !empty($meta_keywords)): ?>
     <meta name="keywords" content="<?php echo htmlspecialchars($meta_keywords); ?>">
     <?php endif; ?>
+    <?php if (!empty($canonical_url)): ?>
+    <link rel="canonical" href="<?php echo htmlspecialchars($canonical_url); ?>">
+    <?php endif; ?>
+    <?php if (!empty($og_image)): ?>
+    <meta property="og:image" content="<?php echo htmlspecialchars($og_image); ?>">
+    <?php endif; ?>
+    <?php if (!empty($page_title)): ?>
+    <meta property="og:title" content="<?php echo htmlspecialchars($page_title . ' - ' . $site_name); ?>">
+    <?php endif; ?>
+    <?php if (!empty($meta_description)): ?>
+    <meta property="og:description" content="<?php echo htmlspecialchars($meta_description); ?>">
+    <?php endif; ?>
+    <meta property="og:type" content="<?php echo htmlspecialchars($og_type ?? 'website'); ?>">
+    <meta property="og:url" content="<?php echo htmlspecialchars($canonical_url ?? BASE_URL); ?>">
+    <meta name="twitter:card" content="summary_large_image">
+    <?php if (!empty($page_title)): ?>
+    <meta name="twitter:title" content="<?php echo htmlspecialchars($page_title . ' - ' . $site_name); ?>">
+    <?php endif; ?>
+    <?php if (!empty($meta_description)): ?>
+    <meta name="twitter:description" content="<?php echo htmlspecialchars($meta_description); ?>">
+    <?php endif; ?>
+    <?php if (!empty($og_image)): ?>
+    <meta name="twitter:image" content="<?php echo htmlspecialchars($og_image); ?>">
+    <?php endif; ?>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>

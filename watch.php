@@ -3,9 +3,11 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
+require_once __DIR__ . '/includes/movie_helpers.php';
 
 $page_title = "Watch";
 $conn = getDBConnection();
+ensureMoviesSchema($conn);
 
 // Get enabled sections for navigation (needed for footer)
 $enable_movies = isSectionEnabled($conn, 'movies');
@@ -15,7 +17,16 @@ $enable_live_tv = isSectionEnabled($conn, 'live_tv');
 // Check if login is required for TV Shows (only for TV episodes)
 $login_required_tv_shows = '0';
 $type = $_GET['type'] ?? '';
+$movie_slug = trim((string) ($_GET['movie_slug'] ?? ''));
+if ($type === '' && $movie_slug !== '') {
+    $type = 'movie';
+}
 $is_tv_episode = ($type === 'tv_episode');
+$is_movie = ($type === 'movie' || $movie_slug !== '');
+
+// Login requirements differ by content type (handled after content is loaded for movies).
+$showPremiumGate = false;
+$movieAccess = ['allowed' => true, 'reason' => ''];
 
 if ($is_tv_episode) {
     // Check login requirement for TV shows
@@ -44,15 +55,18 @@ if ($is_tv_episode) {
     if ($login_required === true) {
         requireLogin();
     }
-} else {
-    // For movies and other content, always require login
+} elseif (!$is_movie) {
     requireLogin();
 }
 
 $type = $_GET['type'] ?? '';
+if ($type === '' && $movie_slug !== '') {
+    $type = 'movie';
+}
 $id = $_GET['id'] ?? 0;
 $show_slug = $_GET['show_slug'] ?? '';
 $episode_info = $_GET['episode_info'] ?? '';
+$current_source_index = 0;
 
 // Redirect live TV to dedicated channel page
 if ($type === 'live_tv') {
@@ -75,15 +89,46 @@ $sources = [];
 $selectedSource = null;
 
 if ($type === 'movie') {
-    $stmt = $conn->prepare("SELECT * FROM movies WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $content = $stmt->get_result()->fetch_assoc();
+    if ($movie_slug !== '') {
+        $stmt = $conn->prepare("SELECT * FROM movies WHERE slug = ?");
+        $stmt->bind_param("s", $movie_slug);
+        $stmt->execute();
+        $content = $stmt->get_result()->fetch_assoc();
+        if ($content) {
+            $id = (int) $content['id'];
+        }
+    } else {
+        $stmt = $conn->prepare("SELECT * FROM movies WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $content = $stmt->get_result()->fetch_assoc();
+    }
     $title = $content['title'] ?? 'Movie';
-    
-    // Update views
+
     if ($content) {
-        $conn->query("UPDATE movies SET views = views + 1 WHERE id = $id");
+        $movieAccess = enforceMovieWatchAccess($conn, $content);
+        if (!$movieAccess['allowed'] && $movieAccess['reason'] === 'premium') {
+            $showPremiumGate = true;
+        }
+
+        if ($movieAccess['allowed']) {
+            $conn->query("UPDATE movies SET views = views + 1 WHERE id = $id");
+        }
+
+        $sources = getActiveWatchSources($content);
+        $source_param = isset($_GET['source']) ? intval($_GET['source']) : null;
+        $resolved_index = movieSourceIndexFromUrlParam($source_param, count($sources));
+        if (!empty($sources)) {
+            $selectedSource = $sources[$resolved_index];
+            $current_source_index = $resolved_index;
+        } else {
+            $selectedSource = null;
+            $current_source_index = 0;
+        }
+        if ($movie_slug === '' && movieHasSlug($content) && isset($_GET['id'])) {
+            header('Location: ' . getMovieWatchUrl($content, $current_source_index, $conn));
+            exit();
+        }
     }
 } elseif ($type === 'tv_episode') {
     // Handle slug-based episode URLs: /watch-tv-show/{show-slug}/s{season}e{episode}
@@ -352,11 +397,23 @@ if ($type === 'movie') {
 }
 
 if (!$content) {
-    header('Location: index.php');
+    header('Location: ' . url());
     exit();
 }
 
 $page_title = $title;
+
+if ($type === 'movie' && !empty($content)) {
+    applyMovieSeoMeta($conn, $content, 'watch');
+    $page_title = $GLOBALS['page_title'] ?? $title;
+}
+
+if ($type === 'movie') {
+    $intro_ad = null;
+    $episode_ads = [];
+    $show_ads = false;
+    $hasSubscription = isLoggedIn() && hasActiveSubscription();
+}
 
 // Get episode info for TV episodes
 $episode_id = 0;
@@ -381,6 +438,8 @@ if ($type === 'tv_episode' && $content) {
             $episode_thumbnail = $show_info_result['poster'];
         }
     }
+    
+    $episode_thumbnail = assetUrl($episode_thumbnail);
     
     // Initialize viewer count (will be updated via AJAX)
     $content['current_viewers'] = 0;
@@ -410,8 +469,26 @@ if (isLoggedIn()) {
     }
 }
 
-// Only include header for movies, not for TV episodes (TV episodes have their own header)
-if ($type !== 'tv_episode') {
+$use_advanced_player = (($type === 'tv_episode' || $type === 'movie') && !empty($sources) && !$showPremiumGate);
+$use_standalone_watch_layout = ($type === 'tv_episode' || ($type === 'movie' && $use_advanced_player));
+$movie_poster_header = ($type === 'movie' && !empty($content)) ? moviePosterUrl($content) : '';
+$movie_header_subtitle = 'Movie';
+if ($type === 'movie' && !empty($content)) {
+    $subtitle_parts = [];
+    if (!empty($content['release_year'])) {
+        $subtitle_parts[] = (int) $content['release_year'];
+    }
+    if (!empty($content['quality_label'])) {
+        $subtitle_parts[] = $content['quality_label'];
+    }
+    if (!empty($content['category_name'])) {
+        $subtitle_parts[] = $content['category_name'];
+    }
+    $movie_header_subtitle = !empty($subtitle_parts) ? implode(' | ', $subtitle_parts) : 'Movie';
+}
+
+// Only include site header for non-player layouts
+if (!$use_standalone_watch_layout) {
 include 'includes/header.php';
 } else {
     ?>
@@ -420,7 +497,13 @@ include 'includes/header.php';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($page_title ?? 'Watch'); ?> - <?php echo getSetting($conn, 'site_name', 'StreamPanel'); ?></title>
+    <title><?php echo htmlspecialchars(($page_title ?? 'Watch') . ' - ' . getSetting($conn, 'site_name', 'StreamPanel')); ?></title>
+    <?php if (!empty($meta_description)): ?>
+    <meta name="description" content="<?php echo htmlspecialchars($meta_description); ?>">
+    <?php endif; ?>
+    <?php if (!empty($meta_keywords)): ?>
+    <meta name="keywords" content="<?php echo htmlspecialchars($meta_keywords); ?>">
+    <?php endif; ?>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -516,6 +599,9 @@ include 'includes/header.php';
 
 if ($type === 'tv_episode' && !empty($sources)): ?>
 <!-- Streaming libraries: HLS.js and dash.js -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+<?php elseif ($type === 'movie' && !empty($sources)): ?>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
 <?php endif; ?>
@@ -696,39 +782,47 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
     width: 100%;
     background: #000;
     position: relative;
-}<?php if ($type === 'tv_episode'): ?>
-/* Match live TV player size for TV episodes */
-.player-container {
-    height: calc(100vh - 80px - 220px); /* header (80px) + footer/nav (~60px) + extra margin */
+}<?php if ($type === 'tv_episode' || $type === 'movie'): ?>
+/* Match live TV player size */
+.player-container,
+.player-container-mobile {
+    height: calc(100vh - 80px - 220px);
     min-height: 250px;
     max-height: calc(100vh - 300px);
 }
 @media (max-width: 480px) {
-    .player-container {
+    .player-container,
+    .player-container-mobile {
         height: calc(100vh - 80px - 380px);
         min-height: 180px;
         max-height: calc(100vh - 460px);
     }
 }
 @media (min-width: 481px) and (max-width: 768px) {
-    .player-container {
+    .player-container,
+    .player-container-mobile {
         height: calc(100vh - 80px - 300px);
         min-height: 220px;
         max-height: calc(100vh - 380px);
     }
 }
-<?php endif; ?>
-.player-container #player-container {
+.video-player-wrapper {
     position: relative;
     width: 100%;
-    <?php if ($type === 'tv_episode'): ?>
     height: 100%;
-    <?php else: ?>
-    padding-bottom: 56.25%; /* 16:9 aspect ratio */
-    <?php endif; ?>
+    background: #000;
+    overflow: hidden;
+}
+<?php endif; ?>
+.player-container #player-container,
+.player-container.player-container-mobile {
+    position: relative;
+    width: 100%;
+    height: 100%;
     background: #000;
 }
-.player-container #player-container > * {
+.player-container #player-container > *,
+.video-player-wrapper > * {
     position: absolute;
     top: 0;
     left: 0;
@@ -891,9 +985,9 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
 </style>
 
 <div class="watch-page animate-in fade-in">
-    <?php if ($type === 'tv_episode'): ?>
-    <!-- Header - Same as Live TV -->
-    <?php if (!$isAndroidTV): ?>
+    <?php if ($type === 'tv_episode' || ($type === 'movie' && $use_advanced_player)): ?>
+    <!-- Header -->
+    <?php if ($type === 'tv_episode' && !$isAndroidTV): ?>
     <div class="sticky-header">
         <!-- Mobile: Two rows -->
         <div class="mobile-header-row1">
@@ -977,12 +1071,107 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
             ⚠️ Stream error – please refresh the page
         </p>
     </div>
+    <?php elseif ($type === 'movie' && !$isAndroidTV): ?>
+    <div class="sticky-header">
+        <div class="mobile-header-row1">
+            <button class="header-back-btn" onclick="handleBack()" aria-label="Back to movie">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5"></path>
+                    <path d="m12 19-7-7 7-7"></path>
+                </svg>
+            </button>
+            <?php if (!empty($movie_poster_header)): ?>
+            <img src="<?php echo htmlspecialchars($movie_poster_header); ?>" alt="<?php echo htmlspecialchars($title); ?>" class="episode-thumbnail-header" onerror="this.style.display='none'">
+            <?php endif; ?>
+            <div class="episode-info-header">
+                <h1><?php echo htmlspecialchars($title); ?></h1>
+                <p><?php echo htmlspecialchars($movie_header_subtitle); ?></p>
+            </div>
+            <?php if (isLoggedIn()): ?>
+            <button id="favoriteBtnMobile" onclick="toggleFavorite()" class="header-back-btn" aria-label="Add to Favorites" title="Add to Favorites">
+                <i class="fas fa-heart" id="favoriteIconMobile"></i>
+            </button>
+            <?php endif; ?>
+            <div class="viewer-count-header" id="viewer-count-mobile">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <span id="viewer-count-mobile-text">0</span>
+            </div>
+            <button class="fullscreen-btn-header" id="fullscreen-button-mobile" onclick="toggleFullscreen()" title="Enter Fullscreen">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3m-18 0v3a2 2 0 0 0 2 2h3"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="desktop-header">
+            <button class="header-back-btn" onclick="handleBack()" aria-label="Back to movie">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5"></path>
+                    <path d="m12 19-7-7 7-7"></path>
+                </svg>
+            </button>
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 0;">
+                <?php if (!empty($movie_poster_header)): ?>
+                <img src="<?php echo htmlspecialchars($movie_poster_header); ?>" alt="<?php echo htmlspecialchars($title); ?>" class="episode-thumbnail-header" onerror="this.style.display='none'">
+                <?php endif; ?>
+                <div class="episode-info-header">
+                    <h1><?php echo htmlspecialchars($title); ?></h1>
+                    <p><?php echo htmlspecialchars($movie_header_subtitle); ?></p>
+                </div>
+                <?php if (isLoggedIn()): ?>
+                <button id="favoriteBtnDesktop" onclick="toggleFavorite()" class="header-back-btn" aria-label="Add to Favorites" title="Add to Favorites">
+                    <i class="fas fa-heart" id="favoriteIconDesktop"></i>
+                </button>
+                <?php endif; ?>
+                <div class="viewer-count-header" id="viewer-count-desktop">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                    <span id="viewer-count-desktop-text">0</span>
+                </div>
+                <button class="fullscreen-btn-header" id="fullscreen-button-desktop" onclick="toggleFullscreen()" title="Enter Fullscreen">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3m-18 0v3a2 2 0 0 0 2 2h3"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <p id="player-error-message" class="player-error-message" style="display: none;">
+            ⚠️ Stream error – please refresh the page
+        </p>
+    </div>
     <?php endif; ?>
     
+    <?php if ($type === 'movie' && $use_advanced_player): ?>
+    <div id="player-container" class="player-container player-container-mobile">
+        <div class="video-player-wrapper" id="video-wrapper">
+            <iframe id="youtubePlayer" style="display: none; border: none;" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+            <div id="htmlEmbedContainer" style="display: none;"></div>
+            <video id="videoPlayer" style="display: none;" controls autoplay playsinline class="w-full h-full">Your browser does not support the video tag.</video>
+            <div id="playerMessage" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; text-align: center; display: none; z-index: 5;">
+                <div id="playerMessageText"></div>
+            </div>
+            <div id="ad-overlay" class="ad-overlay" style="display: none;">
+                <div class="ad-container">
+                    <div id="ad-content"></div>
+                    <div id="ad-controls" class="ad-controls">
+                        <div id="ad-countdown" class="ad-countdown"></div>
+                        <button id="ad-skip-btn" class="ad-skip-btn" style="display: none;" onclick="skipAd()">
+                            Skip Ad (<span id="skip-timer">5</span>s)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php else: ?>
     <div class="watch-container">
         <div class="video-wrapper player-container">
-            <?php if ($type === 'tv_episode' && !empty($sources)): ?>
-                <!-- TV Episode Player with Multiple Sources -->
+            <?php if ($use_advanced_player): ?>
+                <!-- Multi-source Player -->
                 <div id="player-container">
                     <!-- YouTube iframe (hidden by default) -->
                     <iframe id="youtubePlayer" 
@@ -1027,9 +1216,11 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
                 </video>
             <?php endif; ?>
         </div>
-        
+    </div>
+    <?php endif; ?>
+
         <!-- Source Selection Buttons (if multiple sources) -->
-        <?php if ($type === 'tv_episode' && !empty($sources) && count($sources) > 1): ?>
+        <?php if ($use_advanced_player && count($sources) > 1): ?>
         <div class="try-another-source-section">
             <p class="try-another-source-text">If stream not playing video, Try Another Source:</p>
             <div class="try-another-source-links">
@@ -1038,12 +1229,11 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
                     $is_current = ($idx === $current_source_index);
                     $source_num = $idx + 1;
                     
-                    // Build episode URL with source parameter
-                    if (!empty($tv_show_slug) && !empty($episode_info)) {
-                        // Slug-based URL: /watch-tv-show/{show-slug}/s{season}e{episode}?source={idx}
+                    if ($type === 'movie') {
+                        $source_url = getMovieWatchUrl($content, $idx, $conn);
+                    } elseif (!empty($tv_show_slug) && !empty($episode_info)) {
                         $source_url = BASE_URL . '/watch-tv-show/' . htmlspecialchars($tv_show_slug) . '/' . htmlspecialchars($episode_info) . '?source=' . $idx;
                     } else {
-                        // ID-based URL: /watch.php?type=tv_episode&id={id}&source={idx}
                         $source_url = BASE_URL . '/watch.php?type=tv_episode&id=' . $content['id'] . '&source=' . $idx;
                     }
                     ?>
@@ -1056,6 +1246,24 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
             </div>
                     </div>
                     <?php endif; ?>
+
+        <?php if ($type === 'movie'): ?>
+        <?php $movieDownloadLinks = getActiveDownloadLinks($content); ?>
+        <?php if (!empty($movieDownloadLinks) && !empty($movieAccess['allowed'])): ?>
+        <div class="try-another-source-section" style="border-top: 1px solid rgba(255,255,255,0.1);">
+            <p class="try-another-source-text">Download Links:</p>
+            <div class="try-another-source-links">
+                <?php foreach ($movieDownloadLinks as $dlink): ?>
+                <a href="<?php echo htmlspecialchars($dlink['url']); ?>" class="try-source-link" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-download mr-1"></i>
+                    <?php echo htmlspecialchars($dlink['label'] ?? 'Download'); ?>
+                    <?php if (!empty($dlink['quality'])): ?>(<?php echo htmlspecialchars($dlink['quality']); ?>)<?php endif; ?>
+                </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+        <?php endif; ?>
         
         <!-- Next/Previous Episode Navigation -->
         <?php if ($type === 'tv_episode' && (isset($next_episode) || isset($prev_episode))): ?>
@@ -1103,12 +1311,18 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
             </div>
         </div>
         <?php endif; ?>
-    </div>
-    <?php else: ?>
-    <!-- Movies and other content - show info section -->
+    <?php elseif ($type === 'movie' && $showPremiumGate): ?>
+    <!-- Movies premium gate -->
+    <?php
+        $premium_gate_back_url = getMovieDetailUrl($content, $conn);
+        $premium_gate_back_label = 'Back to Movie';
+        $premium_gate_message = 'This movie requires a Premium subscription. Please upgrade to watch.';
+        include __DIR__ . '/includes/premium-gate.php';
+    ?>
+    <?php elseif ($type === 'movie'): ?>
+    <!-- Movie fallback when no JSON sources -->
     <div class="watch-container">
         <div class="video-wrapper player-container">
-                <!-- Movie Player (direct video) -->
                 <video id="videoPlayer" controls autoplay>
                     <source src="<?php echo htmlspecialchars($content['video_url'] ?? $content['stream_url'] ?? ''); ?>" type="video/mp4">
                     Your browser does not support the video tag.
@@ -1131,17 +1345,12 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
             <?php endif; ?>
             
             <div class="watch-meta">
-                <?php if ($type === 'movie'): ?>
                 <span><i class="fas fa-calendar mr-2"></i><?php echo $content['release_year']; ?></span>
                 <?php if (!empty($content['duration']) && $content['duration'] > 0): ?>
                 <span><i class="fas fa-clock mr-2"></i><?php echo $content['duration']; ?> min</span>
                 <?php endif; ?>
                 <span><i class="fas fa-star mr-2"></i><?php echo number_format($content['rating'], 1); ?></span>
                 <span><i class="fas fa-eye mr-2"></i><?php echo number_format($content['views']); ?> views</span>
-                <?php elseif ($type === 'live_tv'): ?>
-                <span><i class="fas fa-broadcast-tower mr-2"></i>Live</span>
-                <span><i class="fas fa-eye mr-2"></i><?php echo number_format($content['views']); ?> views</span>
-                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -1149,10 +1358,10 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
 </div>
 
 <?php
-// For TV episodes, we need to add a wrapper div since footer expects pt-16 structure
-if ($type === 'tv_episode') {
-    // TV episodes don't have the header's pt-16 div, so we add a wrapper
-    echo '<div class="pt-16">';
+// For standalone player layouts (TV episodes / movies)
+if ($use_standalone_watch_layout) {
+    // TV episodes don't have the site header wrapper
+    echo '';
 }
 // Include footer for all content types
 include 'includes/footer.php';
@@ -1166,7 +1375,7 @@ const contentId = <?php echo $type === "tv_episode" ? ($content['tv_show_id'] ??
 
 async function checkFavorite() {
     try {
-        const response = await fetch(`<?php echo BASE_URL; ?>/api/favorites.php?content_type=${contentType}&content_id=${contentId}`);
+        const response = await fetch(`<?php echo apiUrl('api/favorites.php'); ?>?content_type=${contentType}&content_id=${contentId}`);
         const data = await response.json();
         if (data.success && data.is_favorite) {
             // Update mobile icon
@@ -1199,7 +1408,7 @@ async function toggleFavorite() {
     const isFavorite = icon && icon.classList.contains('text-red-500');
     
     try {
-        const url = `<?php echo BASE_URL; ?>/api/favorites.php`;
+        const url = `<?php echo apiUrl('api/favorites.php'); ?>`;
         const method = isFavorite ? 'DELETE' : 'POST';
         const response = await fetch(url, {
             method: method,
@@ -1238,8 +1447,8 @@ async function toggleFavorite() {
 checkFavorite();
 <?php endif; ?>
 
-// TV Episode Player Logic
-<?php if ($type === 'tv_episode' && !empty($sources)): ?>
+// Multi-source Player Logic
+<?php if ($use_advanced_player): ?>
 const episodeSources = <?php echo json_encode($sources, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
 let currentSourceIndex = <?php echo $current_source_index; ?>;
 
@@ -1253,7 +1462,7 @@ const adsData = <?php echo json_encode([
     'loop_interval' => $episode_ads['loop_interval'] ?? null,
     'banner' => $episode_ads['banner'] ?? null,
     'popup' => $episode_ads['popup'] ?? null,
-    'show_ads' => $show_ads ?? true,
+    'show_ads' => $show_ads ?? false,
     'is_premium' => $hasSubscription ?? false
 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
 
@@ -1265,7 +1474,7 @@ function getProxiedStreamUrl(originalUrl) {
         if (!originalUrl) return originalUrl;
         if (window.location.protocol === 'https:' && /^http:\/\//i.test(originalUrl)) {
             const encoded = btoa(originalUrl);
-            return `${window.location.origin}/proxy/hls-proxy.php?u=${encodeURIComponent(encoded)}`;
+            return `<?php echo apiUrl('proxy/hls-proxy.php'); ?>?u=${encodeURIComponent(encoded)}`;
         }
     } catch (e) {
         console.warn('[Watch] Failed to build proxied URL, using original:', e);
@@ -1610,13 +1819,27 @@ function loadSourceActual(sourceIndex) {
         return;
     }
     
-    // Check for HTML embed
-    const isHtmlEmbed = streamType === 'embed' || streamType === 'html-embed' || streamType === 'html';
+    // Check for HTML embed / iframe
+    const isHtmlEmbed = streamType === 'embed' || streamType === 'html-embed' || streamType === 'html' || streamType === 'iframe-only';
     if (isHtmlEmbed) {
-        console.log('[Watch] Loading HTML embed source');
+        console.log('[Watch] Loading embed source');
         if (htmlEmbedContainer) {
             htmlEmbedContainer.style.display = 'block';
-            htmlEmbedContainer.innerHTML = originalStreamUrl;
+            const raw = (originalStreamUrl || '').trim();
+            if (raw.startsWith('<')) {
+                htmlEmbedContainer.innerHTML = raw;
+            } else {
+                htmlEmbedContainer.innerHTML = '<iframe src="' + raw.replace(/"/g, '&quot;') + '" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture" style="width:100%;height:100%;border:none;"></iframe>';
+            }
+            const iframe = htmlEmbedContainer.querySelector('iframe');
+            if (iframe) {
+                iframe.style.width = '100%';
+                iframe.style.height = '100%';
+                iframe.style.border = 'none';
+                if (!iframe.getAttribute('allow')) {
+                    iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+                }
+            }
         }
         return;
     }
@@ -1767,24 +1990,130 @@ if (video) {
 }
 <?php endif; ?>
 
+<?php if ($type === 'movie' && $use_advanced_player): ?>
+const movieId = <?php echo (int) $content['id']; ?>;
+const MOVIE_VIEWER_API = <?php echo json_encode(apiUrl('movies/api/viewer_tracker.php')); ?>;
+
+function getMovieViewerToken(id) {
+    const storageKey = 'movie_viewer_token_' + id;
+    let token = sessionStorage.getItem(storageKey);
+    if (!token) {
+        token = 'mv_' + id + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 12);
+        sessionStorage.setItem(storageKey, token);
+    }
+    return token;
+}
+const movieViewerToken = getMovieViewerToken(movieId);
+
+function handleBack() {
+    window.location.href = <?php echo json_encode(getMovieDetailUrl($content, $conn)); ?>;
+}
+
+function toggleFullscreen() {
+    const playerContainer = document.getElementById('player-container');
+    if (!playerContainer) return;
+
+    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
+        if (playerContainer.requestFullscreen) {
+            playerContainer.requestFullscreen();
+        } else if (playerContainer.webkitRequestFullscreen) {
+            playerContainer.webkitRequestFullscreen();
+        } else if (playerContainer.mozRequestFullScreen) {
+            playerContainer.mozRequestFullScreen();
+        } else if (playerContainer.msRequestFullscreen) {
+            playerContainer.msRequestFullscreen();
+        }
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        }
+    }
+}
+
+function updateMovieViewerDisplay(count) {
+    const mobileText = document.getElementById('viewer-count-mobile-text');
+    const desktopText = document.getElementById('viewer-count-desktop-text');
+    const mobileEl = document.getElementById('viewer-count-mobile');
+    const desktopEl = document.getElementById('viewer-count-desktop');
+    if (mobileText) mobileText.textContent = count;
+    if (desktopText) desktopText.textContent = count;
+    if (mobileEl) mobileEl.style.display = 'flex';
+    if (desktopEl) desktopEl.style.display = 'flex';
+}
+
+function updateMovieViewerCount() {
+    fetch(MOVIE_VIEWER_API + '?action=get&movie_id=' + movieId)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data && data.success) {
+                updateMovieViewerDisplay(data.viewers || 0);
+            }
+        })
+        .catch(function(err) { console.error('[Movie] viewer count error:', err); });
+}
+
+function pingMovieViewer() {
+    fetch(MOVIE_VIEWER_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=ping&movie_id=' + encodeURIComponent(movieId) + '&viewer_token=' + encodeURIComponent(movieViewerToken)
+    })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data && data.success) {
+                updateMovieViewerDisplay(data.viewers || 0);
+            }
+        })
+        .catch(function(err) { console.error('[Movie] viewer ping error:', err); });
+}
+
+pingMovieViewer();
+setInterval(pingMovieViewer, 15000);
+setInterval(updateMovieViewerCount, 5000);
+
+window.addEventListener('beforeunload', function() {
+    const formData = new FormData();
+    formData.append('action', 'leave');
+    formData.append('movie_id', movieId);
+    formData.append('viewer_token', movieViewerToken);
+    if (navigator.sendBeacon) {
+        navigator.sendBeacon(MOVIE_VIEWER_API, formData);
+    }
+});
+
+<?php if ($isAndroidTV): ?>
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Backspace' || e.key === 'Escape' || e.key === 'BrowserBack') {
+        e.preventDefault();
+        handleBack();
+    }
+});
+<?php endif; ?>
+<?php endif; ?>
+
 <?php if ($type === 'tv_episode' && $episode_id > 0): ?>
 // Episode Viewer Tracking and Fullscreen
 const episodeId = <?php echo $episode_id; ?>;
 
 // Helper function to get API URL
 function getApiUrl(endpoint) {
-    const baseUrl = '<?php echo BASE_URL; ?>';
     if (endpoint.includes('viewer_tracker')) {
-        return baseUrl + '/shows/api/viewer_tracker.php';
+        return <?php echo json_encode(apiUrl('shows/api/viewer_tracker.php')); ?>;
     }
-    return baseUrl + '/api/' + endpoint;
+    return <?php echo json_encode(apiUrl('api/')); ?> + endpoint.replace(/^\//, '');
 }
 
 // Handle back navigation
 function handleBack() {
     const showSlug = '<?php echo !empty($tv_show_slug) ? htmlspecialchars($tv_show_slug, ENT_QUOTES) : ""; ?>';
     if (showSlug) {
-        window.location.href = '<?php echo BASE_URL; ?>/tv-show/' + showSlug;
+        window.location.href = '<?php echo url('tv-show'); ?>/' + showSlug;
     } else {
         window.history.back();
     }

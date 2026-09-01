@@ -128,6 +128,18 @@ while ($row = $result->fetch_assoc()) {
                 </div>
             </div>
             
+            <!-- TMDB Integration -->
+            <div class="border-t border-gray-800 pt-6">
+                <h3 class="text-lg font-semibold mb-3 text-gray-300">TMDB Integration</h3>
+                <div>
+                    <label class="block text-sm font-semibold mb-2">TMDB API Key</label>
+                    <input type="text" name="tmdb_api_key" value="<?php echo htmlspecialchars($settings['tmdb_api_key'] ?? ''); ?>" 
+                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white"
+                           placeholder="Enter your TMDB API key (v3)">
+                    <p class="text-xs text-gray-400 mt-1">Get a free API key from <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener" class="text-blue-400 underline">themoviedb.org/settings/api</a>. Used to auto-fetch movie metadata in Admin → Movies.</p>
+                </div>
+            </div>
+
             <!-- Section Management -->
             <div class="border-t border-gray-800 pt-6">
                 <h3 class="text-lg font-semibold mb-3 text-gray-300">Section Management</h3>

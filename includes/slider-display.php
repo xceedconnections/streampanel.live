@@ -229,9 +229,9 @@ $GLOBALS['page_has_sliders'] = true;
             <?php foreach ($slider['slides'] as $index => $slide): ?>
             <div class="slider-slide" data-slide-index="<?php echo $index; ?>">
                 <a href="<?php echo getSlideLink($slide, $conn); ?>" style="display: block; width: 100%; height: 100%;">
-                    <img src="<?php echo htmlspecialchars($slide['image_url']); ?>" 
+                    <img src="<?php echo htmlspecialchars(assetUrl($slide['image_url'])); ?>" 
                          alt="<?php echo htmlspecialchars($slide['title'] ?? 'Slide'); ?>"
-                         onerror="this.src='<?php echo BASE_URL; ?>/assets/placeholder.jpg'">
+                         onerror="this.src='<?php echo url('assets/placeholder.jpg'); ?>'">
                     <div class="slider-overlay"></div>
                     <?php if ($slide['title'] || $slide['description']): ?>
                     <div class="slider-content">

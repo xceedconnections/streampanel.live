@@ -125,10 +125,10 @@ if (isset($_GET['edit_intro'])) {
             <div class="mt-4" id="intro_current_preview">
                 <p class="text-sm text-gray-400 mb-2">Current:</p>
                 <?php if (in_array(strtolower(pathinfo($edit_ad['logo'], PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'])): ?>
-                <img src="<?php echo BASE_URL . '/' . htmlspecialchars($edit_ad['logo']); ?>" alt="Current logo" 
+                <img src="<?php echo htmlspecialchars(assetUrl($edit_ad['logo'])); ?>" alt="Current logo" 
                      class="max-w-xs max-h-48 object-contain bg-gray-800 rounded p-2">
                 <?php else: ?>
-                <video src="<?php echo BASE_URL . '/' . htmlspecialchars($edit_ad['logo']); ?>" 
+                <video src="<?php echo htmlspecialchars(assetUrl($edit_ad['logo'])); ?>" 
                        class="max-w-xs max-h-48 bg-gray-800 rounded p-2" controls></video>
                 <?php endif; ?>
             </div>
@@ -242,10 +242,10 @@ if (isset($_GET['edit_intro'])) {
             <div class="mt-4" id="current_preview">
                 <p class="text-sm text-gray-400 mb-2">Current:</p>
                 <?php if (in_array(strtolower(pathinfo($edit_ad['logo'], PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'])): ?>
-                <img src="<?php echo BASE_URL . '/' . htmlspecialchars($edit_ad['logo']); ?>" alt="Current logo" 
+                <img src="<?php echo htmlspecialchars(assetUrl($edit_ad['logo'])); ?>" alt="Current logo" 
                      class="max-w-xs max-h-48 object-contain bg-gray-800 rounded p-2">
                 <?php else: ?>
-                <video src="<?php echo BASE_URL . '/' . htmlspecialchars($edit_ad['logo']); ?>" 
+                <video src="<?php echo htmlspecialchars(assetUrl($edit_ad['logo'])); ?>" 
                        class="max-w-xs max-h-48 bg-gray-800 rounded p-2" controls></video>
                 <?php endif; ?>
             </div>
@@ -347,10 +347,10 @@ if (isset($_GET['edit_intro'])) {
                     <td class="p-3">
                         <?php if (!empty($ad['logo'])): ?>
                             <?php if (in_array(strtolower(pathinfo($ad['logo'], PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'])): ?>
-                            <img src="<?php echo BASE_URL . '/' . htmlspecialchars($ad['logo']); ?>" alt="Logo" 
+                            <img src="<?php echo htmlspecialchars(assetUrl($ad['logo'])); ?>" alt="Logo" 
                                  class="w-16 h-16 object-contain bg-gray-800 rounded">
                             <?php else: ?>
-                            <video src="<?php echo BASE_URL . '/' . htmlspecialchars($ad['logo']); ?>" 
+                            <video src="<?php echo htmlspecialchars(assetUrl($ad['logo'])); ?>" 
                                    class="w-16 h-16 object-contain bg-gray-800 rounded" muted></video>
                             <?php endif; ?>
                         <?php else: ?>

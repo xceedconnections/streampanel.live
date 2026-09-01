@@ -175,26 +175,7 @@ function sourceExists($sources_json, $new_url) {
  * Convert relative logo path from downloadImageFromUrl to absolute URL stored in DB.
  */
 function buildAbsoluteLogoUrl($relative_path, $conn) {
-    if (empty($relative_path)) {
-        return null;
-    }
-    if (preg_match('#^https?://#i', $relative_path)) {
-        return $relative_path;
-    }
-    if (defined('BASE_URL') && !empty(BASE_URL)) {
-        return rtrim(BASE_URL, '/') . '/' . ltrim($relative_path, '/');
-    }
-    try {
-        if ($conn) {
-            $settings_query = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'site_url' LIMIT 1");
-            if ($settings_query && $settings_row = $settings_query->fetch_assoc()) {
-                return rtrim($settings_row['setting_value'], '/') . '/' . ltrim($relative_path, '/');
-            }
-        }
-    } catch (Exception $e) {
-        // ignore
-    }
-    return '/' . ltrim($relative_path, '/');
+    return normalizeUploadPath($relative_path);
 }
 
 function addSourceToChannel($conn, $channel_id, $new_url, $stream_type) {
@@ -535,10 +516,10 @@ elseif ($action === 'process' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $row = $data[$i];
             
             try {
-            $channel_name = trim($row['channel name'] ?? $row['channel_name'] ?? $row['name'] ?? '');
-            $country = trim($row['country'] ?? 'US');
-            $category = trim($row['category'] ?? '');
-            $description = trim($row['description'] ?? '');
+            $channel_name = normalizeDisplayText(trim($row['channel name'] ?? $row['channel_name'] ?? $row['name'] ?? ''));
+            $country = normalizeDisplayText(trim($row['country'] ?? 'US'));
+            $category = normalizeDisplayText(trim($row['category'] ?? ''));
+            $description = normalizeDisplayText(trim($row['description'] ?? ''));
             $logo_url = trim($row['logo'] ?? '');
             $stream_url = trim($row['url'] ?? $row['stream url'] ?? $row['stream_url'] ?? '');
             $status = strtolower(trim($row['status'] ?? 'active'));

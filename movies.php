@@ -3,9 +3,11 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
+require_once __DIR__ . '/includes/movie_helpers.php';
 
 $page_title = "Movies";
 $conn = getDBConnection();
+ensureMoviesSchema($conn);
 
 // Check if Movies section is enabled
 if (!isSectionEnabled($conn, 'movies')) {
@@ -21,46 +23,13 @@ if (!isSectionEnabled($conn, 'movies')) {
     <?php include 'includes/footer.php'; ?>
     <?php exit(); }
 
-// Check if login is required for Movies
-// Use prepared statement to safely query the database
-$login_required_movies = '0'; // Default to '0' (login NOT required)
-try {
-    $stmt = $conn->prepare("SELECT setting_value FROM settings WHERE setting_key = ? LIMIT 1");
-    if ($stmt) {
-        $key = 'login_required_movies';
-        $stmt->bind_param("s", $key);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($result && $result->num_rows > 0) {
-            $row = $result->fetch_assoc();
-            $login_required_movies = $row['setting_value'] ?? '0';
-        }
-        $stmt->close();
-    }
-} catch (Exception $e) {
-    // On error, default to '0' (login NOT required)
-    error_log("[Movies] Error reading login_required_movies: " . $e->getMessage());
-    $login_required_movies = '0';
-}
-
-// Normalize the value - ensure it's a string and trim whitespace
-$login_required_movies = trim((string)$login_required_movies);
-
-// Only require login if value is exactly '1'
-// Any other value (including empty, null, '0', 'false', etc.) means login NOT required
-$login_required = ($login_required_movies === '1');
-
-// Require login ONLY if explicitly set to '1'
-if ($login_required === true) {
-    requireLogin();
-}
-
+// Movies listing is public; login is enforced per-movie on the detail/watch pages.
 // Get filter parameters
 $category = $_GET['category'] ?? '';
 $search = $_GET['search'] ?? '';
 
 // Build query
-$query = "SELECT m.*, c.name as category_name FROM movies m LEFT JOIN categories c ON m.category_id = c.id WHERE 1=1";
+$query = "SELECT m.*, c.name as category_name FROM movies m LEFT JOIN categories c ON m.category_id = c.id WHERE (m.is_active = 1 OR m.is_active IS NULL)";
 $params = [];
 $types = '';
 
@@ -146,6 +115,70 @@ include 'includes/header.php';
     cursor: pointer;
     transition: transform 0.3s;
     box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+    background: #1a1a1a;
+}
+.movie-card-badges {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    z-index: 10;
+    pointer-events: none;
+}
+.movie-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.2rem;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+.movie-badge-quality {
+    background: #e50914;
+    color: #fff;
+}
+.movie-badge-tag {
+    background: rgba(0,0,0,0.75);
+    color: #fbbf24;
+    border: 1px solid rgba(251,191,36,0.4);
+}
+.movie-badge-year {
+    position: absolute;
+    bottom: 2.5rem;
+    right: 0.5rem;
+    background: rgba(0,0,0,0.8);
+    color: #fff;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.2rem;
+    z-index: 10;
+}
+.movie-card-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.5rem;
+    background: linear-gradient(to top, rgba(0,0,0,0.95), transparent);
+    z-index: 5;
+}
+.movie-card-info h3 {
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #fff;
+}
+.movie-card-info .meta {
+    font-size: 0.65rem;
+    color: #9ca3af;
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.15rem;
 }
 .movie-card-page:hover {
     transform: scale(1.05);
@@ -248,13 +281,29 @@ include 'includes/header.php';
     <?php if (!empty($movies)): ?>
     <div class="movie-grid">
         <?php foreach ($movies as $movie): ?>
-        <a href="<?php echo isLoggedIn() ? 'watch.php?type=movie&id=' . $movie['id'] : 'login.php?redirect=' . urlencode('watch.php?type=movie&id=' . $movie['id']); ?>" class="movie-card-page">
-            <img src="<?php echo htmlspecialchars($movie['thumbnail'] ?? $movie['poster'] ?? FALLBACK_POSTER); ?>" 
+        <?php
+        $detailUrl = getMovieDetailUrl($movie, $conn);
+        $poster = moviePosterUrl($movie);
+        ?>
+        <a href="<?php echo htmlspecialchars($detailUrl); ?>" class="movie-card-page">
+            <?php renderMoviePosterBadges($movie); ?>
+            <?php if (!empty($movie['release_year'])): ?>
+            <span class="movie-badge-year"><?php echo (int) $movie['release_year']; ?></span>
+            <?php endif; ?>
+            <img src="<?php echo htmlspecialchars($poster); ?>" 
                  alt="<?php echo htmlspecialchars($movie['title']); ?>" 
                  loading="lazy"
                  onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
-            <div class="movie-card-overlay-page">
-                <p><?php echo htmlspecialchars($movie['title']); ?></p>
+            <div class="movie-card-info">
+                <h3><?php echo htmlspecialchars($movie['title']); ?></h3>
+                <div class="meta">
+                    <?php if (!empty($movie['rating'])): ?>
+                    <span><i class="fas fa-star text-yellow-400"></i> <?php echo number_format((float) $movie['rating'], 1); ?></span>
+                    <?php endif; ?>
+                    <?php $dur = formatMovieDuration((int) ($movie['duration'] ?? 0)); if ($dur): ?>
+                    <span><?php echo $dur; ?></span>
+                    <?php endif; ?>
+                </div>
             </div>
         </a>
         <?php endforeach; ?>

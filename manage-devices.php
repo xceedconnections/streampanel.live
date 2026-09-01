@@ -9,7 +9,10 @@ $conn = getDBConnection();
 // Define sanitize function if not already defined
 if (!function_exists('sanitize')) {
     function sanitize($data) {
-        return htmlspecialchars(strip_tags(trim($data)));
+        if (is_array($data)) {
+            return array_map('sanitize', $data);
+        }
+        return strip_tags(trim((string) $data));
     }
 }
 

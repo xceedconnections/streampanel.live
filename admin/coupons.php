@@ -178,7 +178,7 @@ function showUsersModal(couponId, couponCode) {
     modalContent.innerHTML = '<div class="text-center py-8"><div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-netflix-red"></div><p class="text-gray-400 mt-4">Loading users...</p></div>';
     
     // Fetch users via AJAX
-    fetch('api/get_coupon_users.php?coupon_id=' + couponId)
+    fetch('<?php echo apiUrl('admin/api/get_coupon_users.php'); ?>?coupon_id=' + couponId)
         .then(response => response.json())
         .then(data => {
             if (data.users && data.users.length > 0) {

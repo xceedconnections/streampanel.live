@@ -3,6 +3,7 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
+require_once __DIR__ . '/includes/movie_helpers.php';
 
 $page_title = "Search Results";
 $conn = getDBConnection();
@@ -298,6 +299,27 @@ include 'includes/header.php';
     position: relative;
     overflow: hidden;
 }
+.search-result-poster .movie-card-badges {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    pointer-events: none;
+}
+.movie-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.2rem;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+.movie-badge-quality { background: #e50914; color: #fff; }
+.movie-badge-tag { background: rgba(0,0,0,0.75); color: #fbbf24; border: 1px solid rgba(251,191,36,0.4); }
 .search-result-poster img {
     position: absolute;
     top: 0;
@@ -541,9 +563,11 @@ include 'includes/header.php';
         </h2>
         <div class="search-results-grid">
             <?php foreach ($results['movies'] as $movie): ?>
-            <div class="search-result-card" onclick="checkLoginAndPlay('<?php echo BASE_URL; ?><?php echo !empty($movie['slug']) ? '/movie/' . htmlspecialchars($movie['slug']) : '/watch.php?type=movie&id=' . $movie['id']; ?>')">
+            <?php $moviePlayUrl = resolveMovieWatchHref($movie, getMovieAccess($conn, $movie), 0, $conn); ?>
+            <div class="search-result-card" onclick="window.location.href='<?php echo htmlspecialchars($moviePlayUrl, ENT_QUOTES); ?>'">
                 <div class="search-result-poster">
-                    <img src="<?php echo htmlspecialchars($movie['poster'] ?? $movie['thumbnail'] ?? FALLBACK_POSTER); ?>" 
+                    <?php renderMoviePosterBadges($movie); ?>
+                    <img src="<?php echo htmlspecialchars(moviePosterUrl($movie)); ?>" 
                          alt="<?php echo htmlspecialchars($movie['title']); ?>"
                          onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
                     <div class="search-result-info">
@@ -571,7 +595,7 @@ include 'includes/header.php';
             <?php foreach ($results['tv_shows'] as $show): ?>
             <div class="search-result-card search-result-card-tv" onclick="checkLoginAndPlay('<?php echo BASE_URL; ?><?php echo !empty($show['slug']) ? '/tv-show/' . htmlspecialchars($show['slug']) : '/tv-show-detail?id=' . $show['id']; ?>')">
                 <div class="search-result-poster search-result-poster-tv">
-                    <img src="<?php echo htmlspecialchars($show['poster'] ?? $show['thumbnail'] ?? FALLBACK_POSTER); ?>" 
+                    <img src="<?php echo htmlspecialchars(assetUrl($show['poster'] ?? $show['thumbnail'] ?? '') ?: FALLBACK_POSTER); ?>" 
                          alt="<?php echo htmlspecialchars($show['title']); ?>"
                          onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
                     <div class="search-result-info">
@@ -608,7 +632,7 @@ include 'includes/header.php';
                onclick="checkLoginAndPlay(event, this.href)">
                 <div class="live-tv-channel-logo">
                     <?php if (!empty($channel['logo'])): ?>
-                        <img src="<?php echo htmlspecialchars($channel['logo']); ?>"
+                        <img src="<?php echo htmlspecialchars(assetUrl($channel['logo'])); ?>"
                              alt="<?php echo htmlspecialchars($channel['name']); ?>"
                              onerror="this.style.display='none'">
                     <?php else: ?>

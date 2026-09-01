@@ -52,12 +52,12 @@ if ($id) {
     $stmt = $conn->prepare("SELECT * FROM live_tv_channels WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
-    $channel = $stmt->get_result()->fetch_assoc();
+    $channel = normalizeLiveTvChannel($stmt->get_result()->fetch_assoc());
 } elseif ($slug) {
     $stmt = $conn->prepare("SELECT * FROM live_tv_channels WHERE slug = ?");
     $stmt->bind_param("s", $slug);
     $stmt->execute();
-    $channel = $stmt->get_result()->fetch_assoc();
+    $channel = normalizeLiveTvChannel($stmt->get_result()->fetch_assoc());
 }
 
 if ($channel) {
@@ -72,14 +72,7 @@ if ($channel) {
     $metaKeywords = "{$channel_name_lower} info, {$channel_name_lower} live tv channel, {$channel_name_lower} details";
 
     // Channel logo URL for social sharing
-    $channel_logo_url = '';
-    if (!empty($channel['logo'])) {
-        if (strpos($channel['logo'], 'http') === 0) {
-            $channel_logo_url = $channel['logo'];
-        } else {
-            $channel_logo_url = BASE_URL . '/' . ltrim($channel['logo'], '/');
-        }
-    }
+    $channel_logo_url = assetUrl($channel['logo'] ?? '');
 
     // Canonical URL should be the info page (/tv/{slug})
     $canonical_url = BASE_URL . '/tv/' . ($channel['slug'] ?? 'channel');
@@ -125,14 +118,7 @@ if ($channel) {
     $metaKeywords = "{$channel_name_lower} live, {$channel_name_lower} live stream, watch {$channel_name_lower} online, {$channel_name_lower} tv channel, live {$channel_category} {$channel_name_lower}, {$channel_name_lower} hd, {$channel_name_lower} sports channel, {$channel_name_lower} free streaming, watch {$channel_name_lower} live";
     
     // Channel logo URL for social sharing
-    $channel_logo_url = '';
-    if (!empty($channel['logo'])) {
-        if (strpos($channel['logo'], 'http') === 0) {
-            $channel_logo_url = $channel['logo'];
-        } else {
-            $channel_logo_url = BASE_URL . '/' . ltrim($channel['logo'], '/');
-        }
-    }
+    $channel_logo_url = assetUrl($channel['logo'] ?? '');
     
     // Canonical URL should point to main watch page
     $canonical_url = BASE_URL . '/watch-live-tv/' . ($channel['slug'] ?? 'channel');

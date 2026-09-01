@@ -175,15 +175,7 @@ function requireLogin() {
     if (!isLoggedIn()) {
         // Store the current page to redirect back after login
         $_SESSION['redirect_after_login'] = $_SERVER['REQUEST_URI'];
-        
-        // Normalize BASE_URL to remove /tv or /api if present (for correct redirect)
-        $login_url = BASE_URL;
-        $login_url = rtrim($login_url, '/');
-        // Remove /tv and /api from the path to ensure we redirect to root login
-        $login_url = preg_replace('#/(tv|api)(/|$)#', '', $login_url);
-        $login_url = rtrim($login_url, '/') . '/login.php';
-        
-        header('Location: ' . $login_url);
+        header('Location: ' . url('login'));
         exit();
     }
     
@@ -191,7 +183,7 @@ function requireLogin() {
     if (isset($_SESSION['temp_session']) && $_SESSION['temp_session'] === true) {
         $current_page = basename($_SERVER['PHP_SELF']);
         if ($current_page !== 'manage-devices.php') {
-            header('Location: ' . BASE_URL . '/manage-devices.php?device_limit=1');
+            header('Location: ' . url('manage-devices') . '?device_limit=1');
         exit();
         }
     }
@@ -201,7 +193,7 @@ function requireLogin() {
 function requireAdminLogin() {
     if (!isAdminLoggedIn()) {
         require_once __DIR__ . '/../config/config.php';
-        header('Location: ' . BASE_URL . '/admin/login.php');
+        header('Location: ' . url('admin/login.php'));
         exit();
     }
 }

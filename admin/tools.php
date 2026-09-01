@@ -113,7 +113,7 @@ $page_title = "Tools";
                 <h3 class="text-xl font-bold">Remove Channels Without Logo</h3>
             </div>
             <p class="text-gray-400 text-sm">
-                See how many live TV channels have no logo, then remove them in one step. Channels with a logo are never touched.
+                See how many live TV channels have no logo (empty in database or file missing in uploads/tv-logos), then remove them in one step. Channels with a valid logo file are never touched.
             </p>
         </a>
 

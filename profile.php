@@ -685,7 +685,7 @@ include 'includes/header.php';
                         <!-- Live TV Channel Styling -->
                         <div class="live-tv-channel-logo">
                             <?php if ($thumbnail): ?>
-                            <img src="<?php echo htmlspecialchars($thumbnail); ?>" alt="<?php echo htmlspecialchars($title); ?>" 
+                            <img src="<?php echo htmlspecialchars(assetUrl($thumbnail)); ?>" alt="<?php echo htmlspecialchars($title); ?>" 
                                  onerror="this.style.display='none'">
                             <?php else: ?>
                             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">
@@ -708,9 +708,9 @@ include 'includes/header.php';
                         <?php else: ?>
                         <!-- Movie/TV Show Styling -->
                         <?php if ($thumbnail): ?>
-                        <img src="<?php echo htmlspecialchars($thumbnail); ?>" alt="<?php echo htmlspecialchars($title); ?>" 
+                        <img src="<?php echo htmlspecialchars(assetUrl($thumbnail)); ?>" alt="<?php echo htmlspecialchars($title); ?>" 
                              class="content-card-image" 
-                             onerror="this.src='<?php echo BASE_URL; ?>/assets/placeholder.jpg'; this.onerror=null;">
+                             onerror="this.src='<?php echo url('assets/placeholder.jpg'); ?>'; this.onerror=null;">
                         <?php else: ?>
                         <div class="content-card-image bg-gray-800 flex items-center justify-center">
                             <i class="fas fa-<?php echo $fav['content_type'] === 'movie' ? 'film' : 'tv'; ?> text-4xl text-gray-600"></i>
@@ -803,7 +803,7 @@ include 'includes/header.php';
                         <!-- Live TV Channel Styling -->
                         <div class="live-tv-channel-logo">
                             <?php if ($thumbnail): ?>
-                            <img src="<?php echo htmlspecialchars($thumbnail); ?>" alt="<?php echo htmlspecialchars($title); ?>" 
+                            <img src="<?php echo htmlspecialchars(assetUrl($thumbnail)); ?>" alt="<?php echo htmlspecialchars($title); ?>" 
                                  onerror="this.style.display='none'">
                             <?php else: ?>
                             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">
@@ -841,9 +841,9 @@ include 'includes/header.php';
                         <?php else: ?>
                         <!-- Movie/TV Show Styling -->
                         <?php if ($thumbnail): ?>
-                        <img src="<?php echo htmlspecialchars($thumbnail); ?>" alt="<?php echo htmlspecialchars($title); ?>" 
+                        <img src="<?php echo htmlspecialchars(assetUrl($thumbnail)); ?>" alt="<?php echo htmlspecialchars($title); ?>" 
                              class="content-card-image" 
-                             onerror="this.src='<?php echo BASE_URL; ?>/assets/placeholder.jpg'; this.onerror=null;">
+                             onerror="this.src='<?php echo url('assets/placeholder.jpg'); ?>'; this.onerror=null;">
                         <?php else: ?>
                         <div class="content-card-image bg-gray-800 flex items-center justify-center">
                             <i class="fas fa-<?php echo $item['content_type'] === 'movie' ? 'film' : 'tv'; ?> text-4xl text-gray-600"></i>

@@ -5,12 +5,22 @@
 
 require_once __DIR__ . '/../../config/database.php';
 
+require_once __DIR__ . '/../../includes/text_helpers.php';
+
 // Sanitize input (only if not already defined)
 if (!function_exists('sanitize')) {
+    /**
+     * Clean user input for database storage (do not HTML-encode; encode at output).
+     */
     function sanitize($data) {
-        return htmlspecialchars(strip_tags(trim($data)));
+        if (is_array($data)) {
+            return array_map('sanitize', $data);
+        }
+        return strip_tags(trim((string) $data));
     }
 }
+
+// normalizeDisplayText lives in includes/text_helpers.php
 
 // Get all categories
 function getAllCategories($conn) {
@@ -47,7 +57,8 @@ function getChannelById($conn, $id) {
     $stmt = $conn->prepare("SELECT * FROM live_tv_channels WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
-    return $stmt->get_result()->fetch_assoc();
+    $channel = $stmt->get_result()->fetch_assoc();
+    return normalizeLiveTvChannel($channel);
 }
 
 // Parse JSON sources
@@ -258,8 +269,17 @@ function getUserById($conn, $id) {
 
 // Get statistics
 function getAdminStats($conn) {
-    $stats = [];
-    
+    $stats = [
+        'total_movies' => 0,
+        'total_tv_shows' => 0,
+        'total_channels' => 0,
+        'total_users' => 0,
+        'total_categories' => 0,
+        'featured_movies' => 0,
+        'featured_tv_shows' => 0,
+        'featured_channels' => 0,
+    ];
+
     try {
         $stats['total_movies'] = $conn->query("SELECT COUNT(*) as count FROM movies")->fetch_assoc()['count'] ?? 0;
         $stats['total_tv_shows'] = $conn->query("SELECT COUNT(*) as count FROM tv_shows")->fetch_assoc()['count'] ?? 0;
@@ -270,9 +290,9 @@ function getAdminStats($conn) {
         $stats['featured_tv_shows'] = $conn->query("SELECT COUNT(*) as count FROM tv_shows WHERE featured = 1")->fetch_assoc()['count'] ?? 0;
         $stats['featured_channels'] = $conn->query("SELECT COUNT(*) as count FROM live_tv_channels WHERE featured = 1")->fetch_assoc()['count'] ?? 0;
     } catch (Exception $e) {
-        // Return empty stats on error
+        // Return zeroed defaults on error
     }
-    
+
     return $stats;
 }
 
@@ -433,6 +453,54 @@ function getConcurrentViewersByEpisode($conn) {
             ORDER BY concurrent_viewers DESC
         ");
         
+        $viewers = [];
+        while ($row = $result->fetch_assoc()) {
+            $viewers[] = $row;
+        }
+        return $viewers;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Get total concurrent movie viewers
+function getTotalConcurrentMovieViewers($conn) {
+    try {
+        try {
+            $conn->query('DELETE FROM movie_viewers WHERE last_ping < DATE_SUB(NOW(), INTERVAL 30 SECOND)');
+        } catch (Exception $e) {
+            // Table might not exist yet
+        }
+
+        $result = $conn->query('SELECT COUNT(DISTINCT session_id) as total FROM movie_viewers');
+        return (int) ($result->fetch_assoc()['total'] ?? 0);
+    } catch (Exception $e) {
+        return 0;
+    }
+}
+
+// Get concurrent viewers by movie
+function getConcurrentViewersByMovie($conn) {
+    try {
+        try {
+            $conn->query('DELETE FROM movie_viewers WHERE last_ping < DATE_SUB(NOW(), INTERVAL 30 SECOND)');
+        } catch (Exception $e) {
+            // Table might not exist yet
+        }
+
+        $result = $conn->query("
+            SELECT
+                mv.movie_id,
+                m.title as movie_title,
+                m.slug as movie_slug,
+                COALESCE(m.views, 0) as total_views,
+                COUNT(DISTINCT mv.session_id) as concurrent_viewers
+            FROM movie_viewers mv
+            LEFT JOIN movies m ON mv.movie_id = m.id
+            GROUP BY mv.movie_id, m.title, m.slug, m.views
+            ORDER BY concurrent_viewers DESC
+        ");
+
         $viewers = [];
         while ($row = $result->fetch_assoc()) {
             $viewers[] = $row;
