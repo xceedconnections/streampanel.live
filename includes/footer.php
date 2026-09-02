@@ -25,7 +25,7 @@
         $site_name = 'StreamPanel';
     }
     ?>
-    <footer class="bg-black border-t border-gray-800 mt-20 py-12">
+    <footer class="site-footer-desktop bg-black border-t border-gray-800 mt-20 py-12">
         <div class="container mx-auto px-4">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div>
@@ -106,12 +106,7 @@
     $current_page = basename($_SERVER['PHP_SELF']);
     $current_path = $_SERVER['REQUEST_URI'] ?? '';
     ?>
-    <?php 
-    // Only show mobile footer nav on mobile devices (not desktop)
-    // Check if it's a mobile device (not desktop browser)
-    $isMobile = isset($_SERVER['HTTP_USER_AGENT']) && preg_match('/(Mobile|Android|iPhone|iPad|iPod|BlackBerry|Windows Phone)/i', $_SERVER['HTTP_USER_AGENT']);
-    ?>
-    <?php if (!$isAndroidTV && $isMobile): ?>
+    <?php if (!$isAndroidTV): ?>
     <nav class="mobile-footer-nav">
         <a href="<?php echo BASE_URL; ?>/" class="nav-item <?php echo ($current_page == 'index.php' || $current_path == '/' || $current_path == BASE_URL . '/') ? 'active' : ''; ?>">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -161,6 +156,14 @@
             <span>Search</span>
         </a>
     </nav>
+    <script>
+    (function () {
+        var nav = document.querySelector('.mobile-footer-nav');
+        if (nav && nav.parentElement !== document.body) {
+            document.body.appendChild(nav);
+        }
+    })();
+    </script>
     <?php endif; ?>
 </body>
 </html>

@@ -136,7 +136,6 @@ include 'includes/header.php';
 
 <style>
 .page-container {
-    min-height: 100vh;
     background: #000;
     padding: 2rem 0;
 }

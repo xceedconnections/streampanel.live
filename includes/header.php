@@ -167,26 +167,44 @@ $current_page = basename($_SERVER['PHP_SELF']);
             backdrop-filter: blur(10px);
         }
         
-        /* Mobile Footer Navigation - Android TV/Phone Style */
+        /* Mobile Footer Navigation - always fixed at bottom */
+        :root {
+            --mobile-nav-height: 60px;
+        }
         .mobile-footer-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
+            display: flex !important;
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            max-width: 100vw !important;
             background: rgba(20, 20, 20, 0.98);
             backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border-top: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
             justify-content: space-around;
             align-items: center;
-            padding: 0.5rem 0;
-            z-index: 1000;
-            height: 60px;
+            padding: 0.35rem 0 calc(0.35rem + env(safe-area-inset-bottom, 0px));
+            z-index: 99999 !important;
+            height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
             box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+            transform: none !important;
+            pointer-events: auto;
         }
-        @media (min-width: 768px) {
-            .mobile-footer-nav {
-                display: none; /* Hide on desktop */
+        body:has(.mobile-footer-nav) {
+            padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+        }
+        body:has(.mobile-footer-nav) .page-container,
+        body:has(.mobile-footer-nav) .home-page,
+        body:has(.mobile-footer-nav) .search-page,
+        body:has(.mobile-footer-nav) .actor-page {
+            min-height: auto;
+            padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+        }
+        @media (max-width: 767px) {
+            .site-footer-desktop {
+                display: none;
             }
         }
         .mobile-footer-nav .nav-item {
@@ -231,16 +249,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
         .mobile-footer-nav .nav-item.active span,
         .mobile-footer-nav .nav-item:hover span {
             font-weight: 600;
-        }
-        
-        /* Add bottom padding to body for mobile footer */
-        body {
-            padding-bottom: 60px;
-        }
-        @media (min-width: 768px) {
-            body {
-                padding-bottom: 0;
-            }
         }
     </style>
 </head>

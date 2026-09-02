@@ -129,7 +129,6 @@ include 'includes/header.php';
 
 <style>
 .page-container {
-    min-height: 100vh;
     background: #000;
     padding: 2rem 0;
 }
@@ -648,8 +647,6 @@ function renderMovieGridCard(array $movie, mysqli $conn): void
     </div>
     <?php endif; ?>
 </div>
-
-<?php include __DIR__ . '/includes/search-suggest.js.php'; ?>
 
 <script>
 function scrollCategoryFilterLeft() {

@@ -6,7 +6,7 @@ require_once __DIR__ . '/admin/includes/functions.php';
 require_once __DIR__ . '/includes/movie_helpers.php';
 require_once __DIR__ . '/includes/cast_helpers.php';
 
-$page_title = "Search Results";
+$page_title = "Search";
 $conn = getDBConnection();
 
 // Check if login is required for TV channels
@@ -99,10 +99,15 @@ if (empty($login_required_movies) || $login_required_movies === '0' || $login_re
     $movies_login_required = false;
 }
 
-$search_query = $_GET['q'] ?? '';
+$search_query = trim($_GET['q'] ?? '');
 $type_filter = $_GET['type'] ?? '';
 $category_filter = $_GET['category'] ?? '';
 $country_filter = $_GET['country'] ?? '';
+$has_search = $search_query !== '';
+
+if ($has_search) {
+    $page_title = 'Search Results';
+}
 
 $results = [
     'movies' => [],
@@ -111,7 +116,7 @@ $results = [
     'live_tv' => []
 ];
 
-if (!empty($search_query)) {
+if ($has_search) {
     // Normalize search to lowercase so matching is case-insensitive regardless of column collation.
     // Use strtolower here because mbstring may not be enabled on all servers.
     $normalized_search = strtolower($search_query);
@@ -219,12 +224,63 @@ include 'includes/header.php';
     padding: 2rem 0;
 }
 .search-header {
-    padding: 0 1.5rem 2rem;
+    padding: 0 1.5rem 1.5rem;
 }
 @media (min-width: 768px) {
     .search-header {
         padding: 0 3rem 2rem;
     }
+}
+.search-form-wrap {
+    position: relative;
+}
+.search-page-input {
+    width: 100%;
+    background: #111;
+    border: 1px solid #374151;
+    border-radius: 0.5rem;
+    padding: 0.875rem 1rem;
+    color: #fff;
+    font-size: 1rem;
+}
+.search-page-input:focus {
+    outline: none;
+    border-color: #e50914;
+    background: #141414;
+}
+.search-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+.search-filter-row select {
+    flex: 1;
+    min-width: 140px;
+    background: #111;
+    border: 1px solid #374151;
+    border-radius: 0.5rem;
+    padding: 0.625rem 0.875rem;
+    color: #fff;
+    font-size: 0.875rem;
+}
+.search-filter-row select:focus {
+    outline: none;
+    border-color: #e50914;
+}
+.search-empty-state {
+    text-align: center;
+    padding: 3rem 1.5rem 2rem;
+    color: #9ca3af;
+}
+.search-empty-state i {
+    font-size: 3rem;
+    color: #4b5563;
+    margin-bottom: 1rem;
+}
+.search-empty-state p {
+    font-size: 1rem;
+    line-height: 1.6;
 }
 .search-results-section {
     padding: 0 1.5rem 2rem;
@@ -530,18 +586,54 @@ include 'includes/header.php';
 
 <div class="search-page animate-in fade-in">
     <div class="search-header">
-        <h1 class="text-4xl font-bold mb-4">Search Results</h1>
-        <?php if (!empty($search_query)): ?>
-        <p class="text-gray-400">Found <?php echo $total_results; ?> result(s) for "<strong><?php echo htmlspecialchars($search_query); ?></strong>"</p>
-        <?php else: ?>
-        <p class="text-gray-400">Enter a search term to find movies, actors, TV shows, and live TV channels</p>
+        <h1 class="text-4xl font-bold mb-4"><?php echo $has_search ? 'Search Results' : 'Search'; ?></h1>
+
+        <form method="GET" action="<?php echo BASE_URL; ?>/search" id="search-page-form">
+            <div class="search-form-wrap" id="search-page-form-wrap">
+                <div class="flex gap-2">
+                    <input type="text"
+                           name="q"
+                           id="search-page-input"
+                           value="<?php echo htmlspecialchars($search_query); ?>"
+                           placeholder="Search movies, actors, TV shows, channels..."
+                           class="search-page-input flex-1"
+                           autocomplete="off"
+                           <?php echo !$has_search ? 'autofocus' : ''; ?>>
+                    <button type="submit" class="bg-netflix-red hover:bg-red-700 px-5 py-2 rounded-lg whitespace-nowrap font-semibold">
+                        <i class="fas fa-search mr-1"></i>Search
+                    </button>
+                </div>
+            </div>
+            <div class="search-filter-row">
+                <select name="type" aria-label="Filter by type">
+                    <option value="">All Types</option>
+                    <option value="movie" <?php echo $type_filter === 'movie' ? 'selected' : ''; ?>>Movies</option>
+                    <option value="tv-show" <?php echo $type_filter === 'tv-show' ? 'selected' : ''; ?>>TV Shows</option>
+                    <option value="live-tv" <?php echo $type_filter === 'live-tv' ? 'selected' : ''; ?>>Live TV</option>
+                </select>
+                <select name="category" aria-label="Filter by category">
+                    <option value="">All Categories</option>
+                    <?php
+                    $search_categories = $conn->query("SELECT * FROM categories WHERE is_active = 1 ORDER BY name ASC")->fetch_all(MYSQLI_ASSOC);
+                    foreach ($search_categories as $cat):
+                    ?>
+                    <option value="<?php echo htmlspecialchars($cat['slug']); ?>" <?php echo $category_filter === $cat['slug'] ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($cat['name']); ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </form>
+
+        <?php if ($has_search): ?>
+        <p class="text-gray-400 mt-4">Found <?php echo $total_results; ?> result(s) for "<strong><?php echo htmlspecialchars($search_query); ?></strong>"</p>
         <?php endif; ?>
     </div>
-    
-    <?php if (empty($search_query)): ?>
-    <div class="search-results-section text-center py-20">
-        <i class="fas fa-search text-6xl text-gray-600 mb-4"></i>
-        <p class="text-xl text-gray-400">Start typing to search...</p>
+
+    <?php if (!$has_search): ?>
+    <div class="search-empty-state">
+        <i class="fas fa-search"></i>
+        <p>Type a movie title, actor name, TV show, or channel to get started.</p>
     </div>
     <?php else: ?>
     
@@ -702,14 +794,14 @@ include 'includes/header.php';
     </div>
     <?php endif; ?>
     
-    <?php if ($total_results === 0): ?>
+    <?php if ($has_search && $total_results === 0): ?>
     <div class="search-results-section text-center py-20">
         <i class="fas fa-search text-6xl text-gray-600 mb-4"></i>
         <p class="text-xl text-gray-400 mb-2">No results found</p>
         <p class="text-gray-500">Try different keywords or filters</p>
     </div>
     <?php endif; ?>
-    
+
     <?php endif; ?>
 </div>
 
@@ -722,6 +814,20 @@ function checkLoginAndPlay(event, url) {
     window.location.href = url;
     <?php endif; ?>
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    var pageInput = document.getElementById('search-page-input');
+    if (pageInput && typeof initSearchSuggest === 'function') {
+        initSearchSuggest(pageInput, {
+            scope: 'all',
+            form: document.getElementById('search-page-form'),
+            wrapper: document.getElementById('search-page-form-wrap')
+        });
+        if (!pageInput.value.trim()) {
+            pageInput.focus();
+        }
+    }
+});
 </script>
 
 <?php include 'includes/footer.php'; ?>
