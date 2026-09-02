@@ -1,139 +1,73 @@
 RewriteEngine On
+# Path-agnostic rules: works at / and in any subdirectory (e.g. /stream/)
 # APP_BASE: /stream
-RewriteBase /stream/
+# No RewriteBase — Apache resolves relative to this folder automatically
 
-# IMPORTANT: Handle API endpoints FIRST - rewrite requests without .php back to .php
-# This must be before the redirect rule to prevent .php from being stripped
-RewriteCond %{REQUEST_URI} ^/stream/tv/api/viewer_tracker(\?.*)?$ [NC]
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^tv/api/viewer_tracker$ tv/api/viewer_tracker.php [L,QSA]
-
-RewriteCond %{REQUEST_URI} ^/stream/shows/api/viewer_tracker(\?.*)?$ [NC]
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^shows/api/viewer_tracker$ shows/api/viewer_tracker.php [L,QSA]
-
-RewriteCond %{REQUEST_URI} ^/stream/movies/api/viewer_tracker(\?.*)?$ [NC]
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^movies/api/viewer_tracker$ movies/api/viewer_tracker.php [L,QSA]
-
-RewriteCond %{REQUEST_URI} ^/stream/api/search-suggest(\?.*)?$ [NC]
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^api/search-suggest$ api/search-suggest.php [L,QSA]
-
-# Allow API endpoints with .php extension to work directly
-RewriteCond %{REQUEST_URI} ^/stream/tv/api/.*\.php [NC]
-RewriteCond %{REQUEST_FILENAME} -f
+# Pass through real files and directories first
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-RewriteCond %{REQUEST_URI} ^/stream/shows/api/.*\.php [NC]
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
+# API endpoints without .php
+RewriteRule ^tv/api/viewer_tracker/?$ tv/api/viewer_tracker.php [L,QSA]
+RewriteRule ^shows/api/viewer_tracker/?$ shows/api/viewer_tracker.php [L,QSA]
+RewriteRule ^movies/api/viewer_tracker/?$ movies/api/viewer_tracker.php [L,QSA]
+RewriteRule ^api/search-suggest/?$ api/search-suggest.php [L,QSA]
 
-RewriteCond %{REQUEST_URI} ^/stream/movies/api/.*\.php [NC]
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
-
-RewriteCond %{REQUEST_URI} ^/stream/api/.*\.php [NC]
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
-
-# Allow embed-source.php to work directly (needed for HTML embed sources)
-RewriteCond %{REQUEST_URI} ^/stream/embed-source\.php [NC]
-RewriteRule ^ - [L]
-
-# Allow embed-movie-source.php to work directly (needed for movie HTML embed sources)
-RewriteCond %{REQUEST_URI} ^/stream/embed-movie-source\.php [NC]
-RewriteRule ^ - [L]
-
-# Allow proxy scripts to work directly (needed for HLS proxy)
-RewriteCond %{REQUEST_URI} ^/stream/proxy/.*\.php [NC]
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
-
-# Handle sitemap XML requests - rewrite .xml to .php
-RewriteCond %{REQUEST_URI} ^/stream/sitemap-tv-channels\.xml$ [NC]
-RewriteCond %{REQUEST_FILENAME} !-f
+# Sitemap XML -> PHP
 RewriteRule ^sitemap-tv-channels\.xml$ sitemap-tv-channels.php [L,QSA]
 
-# Allow sitemap PHP files to work directly
-RewriteCond %{REQUEST_URI} ^/stream/sitemap.*\.php [NC]
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
+# Redirect old .php URLs to clean URLs (keeps current install path)
+RewriteCond %{THE_REQUEST} \s/+(.+?)\.php([?\s]) [NC]
+RewriteCond %{THE_REQUEST} !/index\.php[?\s] [NC]
+RewriteCond %{THE_REQUEST} !/admin/ [NC]
+RewriteCond %{THE_REQUEST} !/api/ [NC]
+RewriteCond %{THE_REQUEST} !/tv/api/ [NC]
+RewriteCond %{THE_REQUEST} !/shows/api/ [NC]
+RewriteCond %{THE_REQUEST} !/movies/api/ [NC]
+RewriteCond %{THE_REQUEST} !/embed-source\.php [NC]
+RewriteCond %{THE_REQUEST} !/embed-movie-source\.php [NC]
+RewriteCond %{THE_REQUEST} !/countdown\.php [NC]
+RewriteCond %{THE_REQUEST} !/sitemap [NC]
+RewriteCond %{THE_REQUEST} !/proxy/ [NC]
+RewriteCond %{THE_REQUEST} !/fix_user_login_check\.php [NC]
+RewriteCond %{THE_REQUEST} !/_db_check\.php [NC]
+RewriteCond %{THE_REQUEST} !/reset_admin_password\.php [NC]
+RewriteCond %{THE_REQUEST} !/force_fix_tv_login\.php [NC]
+RewriteCond %{THE_REQUEST} !/check_tv_login_setting\.php [NC]
+RewriteCond %{THE_REQUEST} !/test_tv_login\.php [NC]
+RewriteCond %{THE_REQUEST} !/fix_tv_login_setting\.php [NC]
+RewriteCond %{THE_REQUEST} !/debug_login_settings\.php [NC]
+RewriteCond %{THE_REQUEST} !/fix_login_settings\.php [NC]
+RewriteCond %{THE_REQUEST} !/test_tv_shows_login\.php [NC]
+RewriteCond %{THE_REQUEST} !/test_login_debug\.php [NC]
+RewriteCond %{THE_REQUEST} !/test_viewer_tracking\.php [NC]
+RewriteCond %{THE_REQUEST} !/test_tv_show_detail\.php [NC]
+RewriteRule ^ /%1 [R=301,L,NE]
 
-# Allow diagnostic/utility scripts with .php extension to work directly
-RewriteCond %{REQUEST_URI} ^/stream/(fix_user_login_check|_db_check|reset_admin_password|force_fix_tv_login|check_tv_login_setting|test_tv_login|fix_tv_login_setting|debug_login_settings|fix_login_settings|test_tv_shows_login|test_login_debug|test_viewer_tracking|test_tv_show_detail)\.php [NC]
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
-
-# Redirect old .php URLs to clean URLs (301 permanent redirect)
-RewriteCond %{THE_REQUEST} \s/stream/([^?\s]*?)\.php(\?[^\s]*)?\s [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/index\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/tv/api/viewer_tracker [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/shows/api/viewer_tracker [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/movies/api/viewer_tracker [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/admin/ [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/api/ [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/embed-source\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/embed-movie-source\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/countdown\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/sitemap [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/proxy/ [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/fix_user_login_check\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/_db_check\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/reset_admin_password\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/force_fix_tv_login\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/check_tv_login_setting\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/test_tv_login\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/fix_tv_login_setting\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/debug_login_settings\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/fix_login_settings\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/test_tv_shows_login\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/test_login_debug\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/test_viewer_tracking\.php [NC]
-RewriteCond %{THE_REQUEST} !\s/stream/test_tv_show_detail\.php [NC]
-RewriteRule ^ %1%2 [R=301,L]
-
-# Handle root URL (index.php)
+# Home
 RewriteRule ^$ index.php [L]
 
-# Redirect /watch-live-tv/{slug} to tv-channel.php (full player) with slug parameter
+# Pretty routes
 RewriteRule ^watch-live-tv/([a-z0-9-]+)/?$ tv/tv-channel.php?slug=$1 [L,QSA]
-
-# Redirect /tv/{slug} to channel info page with slug parameter
 RewriteRule ^tv/([a-z0-9-]+)/?$ tv/channel-info.php?slug=$1 [L,QSA]
-
-# Redirect /tv-show/{slug} to tv-show-detail.php with slug parameter
 RewriteRule ^tv-show/([a-z0-9-]+)/?$ tv-show-detail.php?slug=$1 [L,QSA]
-
-# Redirect /watch-tv-show/{show-slug}/{episode-info} to watch.php
 RewriteRule ^watch-tv-show/([a-z0-9-]+)/(s[0-9]+e[0-9]+)/?$ watch.php?type=tv_episode&show_slug=$1&episode_info=$2 [L,QSA]
-
-# Countdown pages: /countdown/{slug}
 RewriteRule ^countdown/([a-z0-9-]+)/?$ countdown.php?slug=$1 [L,QSA]
-
-# Movie listing page (must be before slug routes — movies/ folder exists on disk)
 RewriteRule ^movies/?$ movies.php [L,QSA]
-
-# Actor profile pages: /actors/{slug}
 RewriteRule ^actors/([a-z0-9-]+)/?$ actor.php?slug=$1 [L,QSA]
-
-# Movie pages: /movies/{slug} and /movies/{slug}/watch
 RewriteRule ^movies/([a-z0-9-]+)/watch/?$ movies/movie-watch.php?slug=$1 [L,QSA]
 RewriteRule ^movies/([a-z0-9-]+)/?$ movie-detail.php?slug=$1 [L,QSA]
-
-# Legacy movie URL redirects
 RewriteRule ^movie/([a-z0-9-]+)/?$ movies/$1 [R=301,L]
 RewriteRule ^watch-movie/([a-z0-9-]+)/?$ movies/$1/watch [R=301,L]
 
-# Handle clean URLs without .php extension
+# Clean page URLs without .php
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(live-tv|movies|movie-detail|tv-shows|profile|login|register|watch|manage-devices|tv-show-detail|report|logout|search|about-us|contact|careers|terms-of-use|privacy-policy|cookie-policy)$ $1.php [L,QSA]
+RewriteRule ^(live-tv|movies|movie-detail|tv-shows|profile|login|register|watch|manage-devices|tv-show-detail|report|logout|search|about-us|contact|careers|terms-of-use|privacy-policy|cookie-policy)/?$ $1.php [L,QSA]
 
-# Prevent directory listing
 Options -Indexes
 
-# Protect sensitive files
-<FilesMatch "\.(sql|md|log)\$">
+<FilesMatch "\.(sql|md|log)$">
     Require all denied
 </FilesMatch>

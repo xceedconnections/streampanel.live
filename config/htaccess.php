@@ -1,146 +1,78 @@
 <?php
 /**
- * Auto-generate .htaccess based on detected app base path.
+ * Auto-generate a path-agnostic .htaccess that works at domain root
+ * (https://streampanel.live/) and in a subdirectory (http://localhost/stream/).
  */
 
-function generateHtaccessContent(string $basePath): string
+function generateHtaccessContent(string $basePath = ''): string
 {
-    $basePath = rtrim($basePath, '/');
-    $rewriteBase = ($basePath === '') ? '/' : $basePath . '/';
-    $uriPrefix = ($basePath === '') ? '' : $basePath;
-    $uri = preg_quote($uriPrefix, '#');
+    $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
 
     $diagScripts = 'fix_user_login_check|_db_check|reset_admin_password|force_fix_tv_login|check_tv_login_setting|test_tv_login|fix_tv_login_setting|debug_login_settings|fix_login_settings|test_tv_shows_login|test_login_debug|test_viewer_tracking|test_tv_show_detail';
     $cleanPages = 'live-tv|movies|movie-detail|tv-shows|profile|login|register|watch|manage-devices|tv-show-detail|report|logout|search|about-us|contact|careers|terms-of-use|privacy-policy|cookie-policy';
 
     $lines = [];
     $lines[] = 'RewriteEngine On';
+    $lines[] = '# Path-agnostic rules: works at / and in any subdirectory (e.g. /stream/)';
     $lines[] = "# APP_BASE: {$basePath}";
-    $lines[] = "RewriteBase {$rewriteBase}";
+    $lines[] = '# No RewriteBase — Apache resolves relative to this folder automatically';
     $lines[] = '';
-    $lines[] = '# IMPORTANT: Handle API endpoints FIRST - rewrite requests without .php back to .php';
-    $lines[] = '# This must be before the redirect rule to prevent .php from being stripped';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/tv/api/viewer_tracker(\\?.*)?\$ [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} !-f';
-    $lines[] = 'RewriteRule ^tv/api/viewer_tracker$ tv/api/viewer_tracker.php [L,QSA]';
-    $lines[] = '';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/shows/api/viewer_tracker(\\?.*)?\$ [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} !-f';
-    $lines[] = 'RewriteRule ^shows/api/viewer_tracker$ shows/api/viewer_tracker.php [L,QSA]';
-    $lines[] = '';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/movies/api/viewer_tracker(\\?.*)?\$ [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} !-f';
-    $lines[] = 'RewriteRule ^movies/api/viewer_tracker$ movies/api/viewer_tracker.php [L,QSA]';
-    $lines[] = '';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/api/search-suggest(\\?.*)?\$ [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} !-f';
-    $lines[] = 'RewriteRule ^api/search-suggest$ api/search-suggest.php [L,QSA]';
-    $lines[] = '';
-    $lines[] = '# Allow API endpoints with .php extension to work directly';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/tv/api/.*\\.php [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
+    $lines[] = '# Pass through real files and directories first';
+    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f [OR]';
+    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -d';
     $lines[] = 'RewriteRule ^ - [L]';
     $lines[] = '';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/shows/api/.*\\.php [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
-    $lines[] = 'RewriteRule ^ - [L]';
+    $lines[] = '# API endpoints without .php';
+    $lines[] = 'RewriteRule ^tv/api/viewer_tracker/?$ tv/api/viewer_tracker.php [L,QSA]';
+    $lines[] = 'RewriteRule ^shows/api/viewer_tracker/?$ shows/api/viewer_tracker.php [L,QSA]';
+    $lines[] = 'RewriteRule ^movies/api/viewer_tracker/?$ movies/api/viewer_tracker.php [L,QSA]';
+    $lines[] = 'RewriteRule ^api/search-suggest/?$ api/search-suggest.php [L,QSA]';
     $lines[] = '';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/movies/api/.*\\.php [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
-    $lines[] = 'RewriteRule ^ - [L]';
-    $lines[] = '';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/api/.*\\.php [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
-    $lines[] = 'RewriteRule ^ - [L]';
-    $lines[] = '';
-    $lines[] = '# Allow embed-source.php to work directly (needed for HTML embed sources)';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/embed-source\\.php [NC]";
-    $lines[] = 'RewriteRule ^ - [L]';
-    $lines[] = '';
-    $lines[] = '# Allow embed-movie-source.php to work directly (needed for movie HTML embed sources)';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/embed-movie-source\\.php [NC]";
-    $lines[] = 'RewriteRule ^ - [L]';
-    $lines[] = '';
-    $lines[] = '# Allow proxy scripts to work directly (needed for HLS proxy)';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/proxy/.*\\.php [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
-    $lines[] = 'RewriteRule ^ - [L]';
-    $lines[] = '';
-    $lines[] = '# Handle sitemap XML requests - rewrite .xml to .php';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/sitemap-tv-channels\\.xml\$ [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} !-f';
+    $lines[] = '# Sitemap XML -> PHP';
     $lines[] = 'RewriteRule ^sitemap-tv-channels\\.xml$ sitemap-tv-channels.php [L,QSA]';
     $lines[] = '';
-    $lines[] = '# Allow sitemap PHP files to work directly';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/sitemap.*\\.php [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
-    $lines[] = 'RewriteRule ^ - [L]';
-    $lines[] = '';
-    $lines[] = '# Allow diagnostic/utility scripts with .php extension to work directly';
-    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/({$diagScripts})\\.php [NC]";
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
-    $lines[] = 'RewriteRule ^ - [L]';
-    $lines[] = '';
-    $lines[] = '# Redirect old .php URLs to clean URLs (301 permanent redirect)';
-    $lines[] = "RewriteCond %{THE_REQUEST} \\s{$uri}/([^?\\s]*?)\\.php(\\?[^\\s]*)?\\s [NC]";
-    $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/index\\.php [NC]";
-    $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/tv/api/viewer_tracker [NC]";
-    $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/shows/api/viewer_tracker [NC]";
-    $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/movies/api/viewer_tracker [NC]";
-    $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/admin/ [NC]";
-    $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/api/ [NC]";
-    $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/embed-source\\.php [NC]";
-    $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/embed-movie-source\\.php [NC]";
-    $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/countdown\\.php [NC]";
-    $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/sitemap [NC]";
-    $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/proxy/ [NC]";
+    $lines[] = '# Redirect old .php URLs to clean URLs (keeps current install path)';
+    $lines[] = 'RewriteCond %{THE_REQUEST} \\s/+(.+?)\\.php([?\\s]) [NC]';
+    $lines[] = 'RewriteCond %{THE_REQUEST} !/index\\.php[?\\s] [NC]';
+    $lines[] = 'RewriteCond %{THE_REQUEST} !/admin/ [NC]';
+    $lines[] = 'RewriteCond %{THE_REQUEST} !/api/ [NC]';
+    $lines[] = 'RewriteCond %{THE_REQUEST} !/tv/api/ [NC]';
+    $lines[] = 'RewriteCond %{THE_REQUEST} !/shows/api/ [NC]';
+    $lines[] = 'RewriteCond %{THE_REQUEST} !/movies/api/ [NC]';
+    $lines[] = 'RewriteCond %{THE_REQUEST} !/embed-source\\.php [NC]';
+    $lines[] = 'RewriteCond %{THE_REQUEST} !/embed-movie-source\\.php [NC]';
+    $lines[] = 'RewriteCond %{THE_REQUEST} !/countdown\\.php [NC]';
+    $lines[] = 'RewriteCond %{THE_REQUEST} !/sitemap [NC]';
+    $lines[] = 'RewriteCond %{THE_REQUEST} !/proxy/ [NC]';
     foreach (explode('|', $diagScripts) as $script) {
-        $lines[] = "RewriteCond %{THE_REQUEST} !\\s{$uri}/{$script}\\.php [NC]";
+        $lines[] = "RewriteCond %{THE_REQUEST} !/{$script}\\.php [NC]";
     }
-    $lines[] = 'RewriteRule ^ %1%2 [R=301,L]';
+    $lines[] = 'RewriteRule ^ /%1 [R=301,L,NE]';
     $lines[] = '';
-    $lines[] = '# Handle root URL (index.php)';
+    $lines[] = '# Home';
     $lines[] = 'RewriteRule ^$ index.php [L]';
     $lines[] = '';
-    $lines[] = '# Redirect /watch-live-tv/{slug} to tv-channel.php (full player) with slug parameter';
+    $lines[] = '# Pretty routes';
     $lines[] = 'RewriteRule ^watch-live-tv/([a-z0-9-]+)/?$ tv/tv-channel.php?slug=$1 [L,QSA]';
-    $lines[] = '';
-    $lines[] = '# Redirect /tv/{slug} to channel info page with slug parameter';
     $lines[] = 'RewriteRule ^tv/([a-z0-9-]+)/?$ tv/channel-info.php?slug=$1 [L,QSA]';
-    $lines[] = '';
-    $lines[] = '# Redirect /tv-show/{slug} to tv-show-detail.php with slug parameter';
     $lines[] = 'RewriteRule ^tv-show/([a-z0-9-]+)/?$ tv-show-detail.php?slug=$1 [L,QSA]';
-    $lines[] = '';
-    $lines[] = '# Redirect /watch-tv-show/{show-slug}/{episode-info} to watch.php';
     $lines[] = 'RewriteRule ^watch-tv-show/([a-z0-9-]+)/(s[0-9]+e[0-9]+)/?$ watch.php?type=tv_episode&show_slug=$1&episode_info=$2 [L,QSA]';
-    $lines[] = '';
-    $lines[] = '# Countdown pages: /countdown/{slug}';
     $lines[] = 'RewriteRule ^countdown/([a-z0-9-]+)/?$ countdown.php?slug=$1 [L,QSA]';
-    $lines[] = '';
-    $lines[] = '# Movie listing page (must be before slug routes — movies/ folder exists on disk)';
     $lines[] = 'RewriteRule ^movies/?$ movies.php [L,QSA]';
-    $lines[] = '';
-    $lines[] = '# Actor profile pages: /actors/{slug}';
     $lines[] = 'RewriteRule ^actors/([a-z0-9-]+)/?$ actor.php?slug=$1 [L,QSA]';
-    $lines[] = '';
-    $lines[] = '# Movie pages: /movies/{slug} and /movies/{slug}/watch';
     $lines[] = 'RewriteRule ^movies/([a-z0-9-]+)/watch/?$ movies/movie-watch.php?slug=$1 [L,QSA]';
     $lines[] = 'RewriteRule ^movies/([a-z0-9-]+)/?$ movie-detail.php?slug=$1 [L,QSA]';
-    $lines[] = '';
-    $lines[] = '# Legacy movie URL redirects';
     $lines[] = 'RewriteRule ^movie/([a-z0-9-]+)/?$ movies/$1 [R=301,L]';
     $lines[] = 'RewriteRule ^watch-movie/([a-z0-9-]+)/?$ movies/$1/watch [R=301,L]';
     $lines[] = '';
-    $lines[] = '# Handle clean URLs without .php extension';
+    $lines[] = '# Clean page URLs without .php';
     $lines[] = 'RewriteCond %{REQUEST_FILENAME} !-f';
     $lines[] = 'RewriteCond %{REQUEST_FILENAME} !-d';
-    $lines[] = "RewriteRule ^({$cleanPages})\$ \$1.php [L,QSA]";
+    $lines[] = "RewriteRule ^({$cleanPages})/?$ \$1.php [L,QSA]";
     $lines[] = '';
-    $lines[] = '# Prevent directory listing';
     $lines[] = 'Options -Indexes';
     $lines[] = '';
-    $lines[] = '# Protect sensitive files';
-    $lines[] = '<FilesMatch "\\.(sql|md|log)\$">';
+    $lines[] = '<FilesMatch "\\.(sql|md|log)$">';
     $lines[] = '    Require all denied';
     $lines[] = '</FilesMatch>';
 
@@ -160,9 +92,10 @@ function syncHtaccess(string $basePath): void
 
     $htaccessPath = dirname(__DIR__) . '/.htaccess';
     $expectedMarker = '# APP_BASE: ' . $basePath;
+    $portableMarker = '# Path-agnostic rules:';
     $current = is_file($htaccessPath) ? (string) file_get_contents($htaccessPath) : '';
 
-    if (strpos($current, $expectedMarker) !== false) {
+    if (strpos($current, $expectedMarker) !== false && strpos($current, $portableMarker) !== false) {
         return;
     }
 
