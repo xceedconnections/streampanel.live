@@ -1,12 +1,11 @@
 RewriteEngine On
 # Path-agnostic rules: works at / and in any subdirectory (e.g. /stream/)
-# APP_BASE: /stream
+# APP_BASE: 
 # No RewriteBase — Apache resolves relative to this folder automatically
 
-# Pass through real files and directories first
-RewriteCond %{REQUEST_FILENAME} -f [OR]
-RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^ - [L]
+# Movie listing MUST come before the directory pass-through.
+# A physical movies/ folder exists on disk; without this, /movies/ 404s.
+RewriteRule ^movies/?$ movies.php [L,QSA]
 
 # API endpoints without .php
 RewriteRule ^tv/api/viewer_tracker/?$ tv/api/viewer_tracker.php [L,QSA]
@@ -16,6 +15,11 @@ RewriteRule ^api/search-suggest/?$ api/search-suggest.php [L,QSA]
 
 # Sitemap XML -> PHP
 RewriteRule ^sitemap-tv-channels\.xml$ sitemap-tv-channels.php [L,QSA]
+
+# Pass through real files and directories (except handled routes above)
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
 
 # Redirect old .php URLs to clean URLs (keeps current install path)
 RewriteCond %{THE_REQUEST} \s/+(.+?)\.php([?\s]) [NC]
@@ -54,7 +58,6 @@ RewriteRule ^tv/([a-z0-9-]+)/?$ tv/channel-info.php?slug=$1 [L,QSA]
 RewriteRule ^tv-show/([a-z0-9-]+)/?$ tv-show-detail.php?slug=$1 [L,QSA]
 RewriteRule ^watch-tv-show/([a-z0-9-]+)/(s[0-9]+e[0-9]+)/?$ watch.php?type=tv_episode&show_slug=$1&episode_info=$2 [L,QSA]
 RewriteRule ^countdown/([a-z0-9-]+)/?$ countdown.php?slug=$1 [L,QSA]
-RewriteRule ^movies/?$ movies.php [L,QSA]
 RewriteRule ^actors/([a-z0-9-]+)/?$ actor.php?slug=$1 [L,QSA]
 RewriteRule ^movies/([a-z0-9-]+)/watch/?$ movies/movie-watch.php?slug=$1 [L,QSA]
 RewriteRule ^movies/([a-z0-9-]+)/?$ movie-detail.php?slug=$1 [L,QSA]

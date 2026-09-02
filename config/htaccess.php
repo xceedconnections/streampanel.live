@@ -17,10 +17,9 @@ function generateHtaccessContent(string $basePath = ''): string
     $lines[] = "# APP_BASE: {$basePath}";
     $lines[] = '# No RewriteBase — Apache resolves relative to this folder automatically';
     $lines[] = '';
-    $lines[] = '# Pass through real files and directories first';
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f [OR]';
-    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -d';
-    $lines[] = 'RewriteRule ^ - [L]';
+    $lines[] = '# Movie listing MUST come before the directory pass-through.';
+    $lines[] = '# A physical movies/ folder exists on disk; without this, /movies/ 404s.';
+    $lines[] = 'RewriteRule ^movies/?$ movies.php [L,QSA]';
     $lines[] = '';
     $lines[] = '# API endpoints without .php';
     $lines[] = 'RewriteRule ^tv/api/viewer_tracker/?$ tv/api/viewer_tracker.php [L,QSA]';
@@ -30,6 +29,11 @@ function generateHtaccessContent(string $basePath = ''): string
     $lines[] = '';
     $lines[] = '# Sitemap XML -> PHP';
     $lines[] = 'RewriteRule ^sitemap-tv-channels\\.xml$ sitemap-tv-channels.php [L,QSA]';
+    $lines[] = '';
+    $lines[] = '# Pass through real files and directories (except handled routes above)';
+    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f [OR]';
+    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -d';
+    $lines[] = 'RewriteRule ^ - [L]';
     $lines[] = '';
     $lines[] = '# Redirect old .php URLs to clean URLs (keeps current install path)';
     $lines[] = 'RewriteCond %{THE_REQUEST} \\s/+(.+?)\\.php([?\\s]) [NC]';
@@ -58,7 +62,6 @@ function generateHtaccessContent(string $basePath = ''): string
     $lines[] = 'RewriteRule ^tv-show/([a-z0-9-]+)/?$ tv-show-detail.php?slug=$1 [L,QSA]';
     $lines[] = 'RewriteRule ^watch-tv-show/([a-z0-9-]+)/(s[0-9]+e[0-9]+)/?$ watch.php?type=tv_episode&show_slug=$1&episode_info=$2 [L,QSA]';
     $lines[] = 'RewriteRule ^countdown/([a-z0-9-]+)/?$ countdown.php?slug=$1 [L,QSA]';
-    $lines[] = 'RewriteRule ^movies/?$ movies.php [L,QSA]';
     $lines[] = 'RewriteRule ^actors/([a-z0-9-]+)/?$ actor.php?slug=$1 [L,QSA]';
     $lines[] = 'RewriteRule ^movies/([a-z0-9-]+)/watch/?$ movies/movie-watch.php?slug=$1 [L,QSA]';
     $lines[] = 'RewriteRule ^movies/([a-z0-9-]+)/?$ movie-detail.php?slug=$1 [L,QSA]';
