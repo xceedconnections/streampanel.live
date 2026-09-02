@@ -37,8 +37,6 @@ if ($enabled_sections_count === 1) {
 $featured_movies = [];
 $all_movies = [];
 $popular_movies = [];
-$heroMovie = null;
-$heroImage = '';
 
 if ($enable_movies) {
     $featured_movies = $conn->query("SELECT * FROM movies WHERE featured = 1 AND (is_active = 1 OR is_active IS NULL) ORDER BY rating DESC LIMIT 10")->fetch_all(MYSQLI_ASSOC);
@@ -49,11 +47,6 @@ if ($enable_movies) {
     });
     $popular_movies = array_slice($popular_movies, 0, 10);
 
-    $heroMovie = !empty($featured_movies) ? $featured_movies[0] : null;
-
-    if ($heroMovie) {
-        $heroImage = htmlspecialchars(movieBackdropUrl($heroMovie));
-    }
 }
 
 // Get TV shows for index - featured first, max 6 (2 rows × 3), not in slider
@@ -98,7 +91,7 @@ include 'includes/header.php';
 }
 
 /* Hero Section - full-bleed cinematic banner */
-.home-page .hero-section {
+.home-page .hero-carousel {
     position: relative;
     width: 100vw;
     max-width: 100vw;
@@ -106,6 +99,12 @@ include 'includes/header.php';
     right: 50%;
     margin-left: -50vw;
     margin-right: -50vw;
+    overflow: hidden;
+    background: #000;
+}
+.home-page .hero-section {
+    position: relative;
+    width: 100%;
     min-height: 72vh;
     display: flex;
     align-items: flex-end;
@@ -149,12 +148,83 @@ include 'includes/header.php';
     max-width: 42rem;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1rem;
 }
 @media (min-width: 640px) {
     .home-page .hero-content {
-        gap: 1rem;
+        gap: 1.25rem;
     }
+}
+.hero-carousel {
+    position: relative;
+}
+.hero-slide {
+    display: none;
+}
+.hero-slide.active {
+    display: flex;
+}
+.hero-carousel-dots {
+    position: absolute;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 0.5rem;
+    z-index: 15;
+}
+.hero-carousel-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.45);
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.3s ease;
+}
+.hero-carousel-dot.active {
+    background: #e50914;
+    width: 28px;
+    border-radius: 5px;
+}
+.hero-carousel-dot:hover {
+    background: rgba(255,255,255,0.8);
+}
+.section-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0 1.5rem;
+}
+@media (min-width: 768px) {
+    .section-header-row {
+        padding: 0 3rem;
+    }
+}
+.section-header-row .movie-row-title,
+.section-header-row .live-tv-section-title,
+.section-header-row .tv-shows-section-title {
+    padding: 0;
+    margin: 0;
+}
+.section-view-all {
+    color: #e50914;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: color 0.2s;
+}
+@media (min-width: 768px) {
+    .section-view-all {
+        font-size: 1rem;
+    }
+}
+.section-view-all:hover {
+    color: #f40612;
 }
 .hero-badge {
     display: flex;
@@ -221,15 +291,17 @@ include 'includes/header.php';
 .hero-actions {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    padding-top: 0.5rem;
+    gap: 0.75rem;
+    padding-top: 0.75rem;
+    margin-top: 0.25rem;
 }
 @media (min-width: 640px) {
     .hero-actions {
         flex-direction: row;
         align-items: center;
-        gap: 0.75rem;
+        gap: 1rem;
         padding-top: 1rem;
+        margin-top: 0.5rem;
     }
 }
 @media (min-width: 768px) {
@@ -304,6 +376,10 @@ include 'includes/header.php';
     flex-direction: column;
     gap: 1.5rem;
     padding-bottom: 2.5rem;
+}
+.content-rows.has-hero-banner {
+    margin-top: -3rem;
+    padding-top: 1.5rem;
 }
 @media (min-width: 768px) {
     .content-rows {
@@ -475,8 +551,30 @@ include 'includes/header.php';
     color: #9ca3af;
     margin-top: 0.15rem;
 }
-.movie-card-overlay {
-    display: none;
+.movie-card-play-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    opacity: 0;
+    transition: opacity 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 8;
+    pointer-events: none;
+}
+.movie-card:hover .movie-card-play-overlay {
+    opacity: 1;
+}
+.movie-card-play-icon {
+    background: #e50914;
+    border-radius: 50%;
+    padding: 0.65rem;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
 
 /* TV Show cards on home (use 16:9 and contain so YouTube-style banners are not cropped) */
@@ -568,10 +666,13 @@ include 'includes/header.php';
 .live-tv-section-title {
     font-size: 1.5rem;
     font-weight: 700;
-    margin-bottom: 1rem;
+    margin-bottom: 0;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+.live-tv-section .section-header-row {
+    margin-bottom: 1rem;
 }
 .live-tv-channels-grid {
     display: grid;
@@ -730,44 +831,59 @@ include 'includes/header.php';
 </style>
 
 <div class="home-page animate-in fade-in" style="animation: fadeIn 0.7s ease-out;">
-    <!-- Hero Section -->
-    <?php if ($heroMovie): ?>
-        <?php
-        $heroAccess = getMovieAccess($conn, $heroMovie);
-        $heroPlayUrl = resolveMovieWatchHref($heroMovie, $heroAccess, 0, $conn);
-        $heroPlayLabel = 'Play';
-        if (!$heroAccess['allowed']) {
-            $heroPlayLabel = $heroAccess['reason'] === 'login' ? 'Sign In to Play' : 'Premium Required';
-        }
-        ?>
-        <div class="hero-section">
-            <img src="<?php echo $heroImage; ?>" alt="<?php echo htmlspecialchars($heroMovie['title']); ?>" class="hero-bg-image" onerror="this.style.display='none'">
-            <div class="hero-content">
-                <div class="hero-badge">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                    </svg>
-                    <span>#1 Trending Today</span>
+    <!-- Hero Section - cycles through all featured movies -->
+    <?php if (!empty($featured_movies)): ?>
+        <div class="hero-carousel" id="hero-carousel" data-slide-count="<?php echo count($featured_movies); ?>">
+            <?php foreach ($featured_movies as $slideIndex => $heroMovie): ?>
+                <?php
+                $heroImage = htmlspecialchars(movieBackdropUrl($heroMovie));
+                $heroAccess = getMovieAccess($conn, $heroMovie);
+                $heroPlayUrl = resolveMovieWatchHref($heroMovie, $heroAccess, 0, $conn);
+                $heroPlayLabel = 'Play';
+                if (!$heroAccess['allowed']) {
+                    $heroPlayLabel = $heroAccess['reason'] === 'login' ? 'Sign In to Play' : 'Premium Required';
+                }
+                ?>
+                <div class="hero-section hero-slide<?php echo $slideIndex === 0 ? ' active' : ''; ?>" data-hero-index="<?php echo $slideIndex; ?>">
+                    <img src="<?php echo $heroImage; ?>" alt="<?php echo htmlspecialchars($heroMovie['title']); ?>" class="hero-bg-image" onerror="this.style.display='none'">
+                    <div class="hero-content">
+                        <div class="hero-badge">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                            </svg>
+                            <span>#<?php echo $slideIndex + 1; ?> Trending Today</span>
+                        </div>
+                        <h1 class="hero-title"><?php echo htmlspecialchars($heroMovie['title']); ?></h1>
+                        <p class="hero-description"><?php echo htmlspecialchars($heroMovie['description'] ?? ''); ?></p>
+                        <div class="hero-actions">
+                            <a href="<?php echo htmlspecialchars($heroPlayUrl); ?>" class="btn-play-hero">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="black" style="display: inline-block;">
+                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                </svg>
+                                <?php echo htmlspecialchars($heroPlayLabel); ?>
+                            </a>
+                            <a href="<?php echo htmlspecialchars(getMovieDetailUrl($heroMovie, $conn)); ?>" class="btn-info-hero">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block;">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                </svg>
+                                More Info
+                            </a>
+                        </div>
+                    </div>
                 </div>
-                <h1 class="hero-title"><?php echo htmlspecialchars($heroMovie['title']); ?></h1>
-                <p class="hero-description"><?php echo htmlspecialchars($heroMovie['description'] ?? ''); ?></p>
-                <div class="hero-actions">
-                    <a href="<?php echo htmlspecialchars($heroPlayUrl); ?>" class="btn-play-hero">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="black" style="display: inline-block;">
-                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                        </svg>
-                        <?php echo htmlspecialchars($heroPlayLabel); ?>
-                    </a>
-                    <a href="<?php echo htmlspecialchars(getMovieDetailUrl($heroMovie, $conn)); ?>" class="btn-info-hero">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block;">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="16" x2="12" y2="12"></line>
-                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                        </svg>
-                        More Info
-                    </a>
+            <?php endforeach; ?>
+            <?php if (count($featured_movies) > 1): ?>
+                <div class="hero-carousel-dots" aria-label="Featured movie slides">
+                    <?php foreach ($featured_movies as $dotIndex => $_): ?>
+                        <button type="button"
+                                class="hero-carousel-dot<?php echo $dotIndex === 0 ? ' active' : ''; ?>"
+                                data-hero-dot="<?php echo $dotIndex; ?>"
+                                aria-label="Go to featured movie <?php echo $dotIndex + 1; ?>"></button>
+                    <?php endforeach; ?>
                 </div>
-            </div>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
     
@@ -778,11 +894,16 @@ include 'includes/header.php';
     ?>
     
     <!-- Content Rows (no-hero = no big hero banner, so add top padding so content is not hidden under fixed menu) -->
-    <div class="content-rows <?php if (!$heroMovie): ?>no-hero<?php endif; ?> <?php if (!empty($GLOBALS['page_has_sliders'])): ?>has-slider<?php endif; ?>">
+    <div class="content-rows <?php if (empty($featured_movies)): ?>no-hero<?php else: ?>has-hero-banner<?php endif; ?> <?php if (!empty($GLOBALS['page_has_sliders'])): ?>has-slider<?php endif; ?>">
         <!-- Featured Movies -->
         <?php if (!empty($featured_movies)): ?>
             <div class="movie-row group/row">
-                <h2 class="movie-row-title">✨ Featured Movies</h2>
+                <div class="section-header-row">
+                    <h2 class="movie-row-title">✨ Featured Movies</h2>
+                    <a href="<?php echo BASE_URL; ?>/movies" class="section-view-all">
+                        View All <i class="fas fa-arrow-right ml-1"></i>
+                    </a>
+                </div>
                 <div class="movie-row-container">
                     <button class="movie-row-btn movie-row-btn-left" onclick="slideRow(this, 'left')">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -801,6 +922,13 @@ include 'includes/header.php';
                                      alt="<?php echo htmlspecialchars($movie['title']); ?>" 
                                      loading="lazy"
                                      onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
+                                <div class="movie-card-play-overlay">
+                                    <div class="movie-card-play-icon">
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                        </svg>
+                                    </div>
+                                </div>
                                 <div class="movie-card-info">
                                     <h3><?php echo htmlspecialchars($movie['title']); ?></h3>
                                     <div class="meta">
@@ -848,6 +976,13 @@ include 'includes/header.php';
                                      alt="<?php echo htmlspecialchars($movie['title']); ?>" 
                                      loading="lazy"
                                      onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
+                                <div class="movie-card-play-overlay">
+                                    <div class="movie-card-play-icon">
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                        </svg>
+                                    </div>
+                                </div>
                                 <div class="movie-card-info">
                                     <h3><?php echo htmlspecialchars($movie['title']); ?></h3>
                                     <div class="meta">
@@ -914,13 +1049,18 @@ include 'includes/header.php';
         <!-- Live TV Section -->
         <?php if (!empty($live_tv_channels)): ?>
             <div class="live-tv-section">
-                <h2 class="live-tv-section-title">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #e50914;">
-                        <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
-                        <polyline points="17 2 12 7 7 2"></polyline>
-                    </svg>
-                    Live TV Channels
-                </h2>
+                <div class="section-header-row">
+                    <h2 class="live-tv-section-title">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #e50914;">
+                            <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
+                            <polyline points="17 2 12 7 7 2"></polyline>
+                        </svg>
+                        Live TV Channels
+                    </h2>
+                    <a href="<?php echo BASE_URL; ?>/live-tv" class="section-view-all">
+                        View All Live TV Channels <i class="fas fa-arrow-right ml-1"></i>
+                    </a>
+                </div>
                 <div class="live-tv-channels-grid">
                     <?php foreach (array_slice($live_tv_channels, 0, 12) as $channel): ?>
                         <?php
@@ -994,6 +1134,46 @@ function slideRow(btn, direction) {
     const scrollTo = direction === 'left' ? scroll.scrollLeft - scrollAmount : scroll.scrollLeft + scrollAmount;
     scroll.scrollTo({ left: scrollTo, behavior: 'smooth' });
 }
+
+(function initHeroCarousel() {
+    const carousel = document.getElementById('hero-carousel');
+    if (!carousel) return;
+
+    const slides = carousel.querySelectorAll('.hero-slide');
+    const dots = carousel.querySelectorAll('.hero-carousel-dot');
+    if (slides.length <= 1) return;
+
+    let currentIndex = 0;
+    let timer = null;
+    const intervalMs = 7000;
+
+    function showSlide(index) {
+        currentIndex = (index + slides.length) % slides.length;
+        slides.forEach((slide, i) => slide.classList.toggle('active', i === currentIndex));
+        dots.forEach((dot, i) => dot.classList.toggle('active', i === currentIndex));
+    }
+
+    function nextSlide() {
+        showSlide(currentIndex + 1);
+    }
+
+    function startAutoRotate() {
+        clearInterval(timer);
+        timer = setInterval(nextSlide, intervalMs);
+    }
+
+    dots.forEach((dot) => {
+        dot.addEventListener('click', () => {
+            showSlide(parseInt(dot.getAttribute('data-hero-dot'), 10));
+            startAutoRotate();
+        });
+    });
+
+    carousel.addEventListener('mouseenter', () => clearInterval(timer));
+    carousel.addEventListener('mouseleave', startAutoRotate);
+
+    startAutoRotate();
+})();
 </script>
 
 <?php include 'includes/footer.php'; ?>

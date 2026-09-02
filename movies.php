@@ -87,24 +87,32 @@ include 'includes/header.php';
 }
 .movie-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
     padding: 0 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
 }
 @media (min-width: 640px) {
     .movie-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.875rem;
     }
 }
 @media (min-width: 768px) {
     .movie-grid {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         padding: 0 3rem;
     }
 }
 @media (min-width: 1024px) {
     .movie-grid {
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(6, 1fr);
+    }
+}
+@media (min-width: 1280px) {
+    .movie-grid {
+        grid-template-columns: repeat(7, 1fr);
     }
 }
 .movie-card-page {
@@ -181,7 +189,7 @@ include 'includes/header.php';
     margin-top: 0.15rem;
 }
 .movie-card-page:hover {
-    transform: scale(1.05);
+    transform: scale(1.04);
     z-index: 20;
 }
 .movie-card-page img {
@@ -189,27 +197,33 @@ include 'includes/header.php';
     height: 100%;
     object-fit: cover;
 }
-.movie-card-overlay-page {
+.movie-card-play-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent, transparent);
+    background: rgba(0,0,0,0.55);
     opacity: 0;
     transition: opacity 0.2s;
     display: flex;
-    align-items: flex-end;
-    padding: 0.75rem;
+    align-items: center;
+    justify-content: center;
+    z-index: 8;
+    pointer-events: none;
 }
-.movie-card-page:hover .movie-card-overlay-page {
+.movie-card-page:hover .movie-card-play-overlay {
     opacity: 1;
 }
-.movie-card-overlay-page p {
-    font-size: 0.75rem;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    width: 100%;
+.movie-card-play-icon {
+    background: #e50914;
+    border-radius: 50%;
+    padding: 0.65rem;
     color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.movie-card-overlay-page {
+    display: none;
 }
 .search-input {
     width: 100%;
@@ -294,6 +308,13 @@ include 'includes/header.php';
                  alt="<?php echo htmlspecialchars($movie['title']); ?>" 
                  loading="lazy"
                  onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
+            <div class="movie-card-play-overlay">
+                <div class="movie-card-play-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                </div>
+            </div>
             <div class="movie-card-info">
                 <h3><?php echo htmlspecialchars($movie['title']); ?></h3>
                 <div class="meta">
