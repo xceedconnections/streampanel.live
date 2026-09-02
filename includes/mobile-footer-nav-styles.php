@@ -61,7 +61,7 @@ body {
         width: 100% !important;
         max-width: 100% !important;
         margin: 0 !important;
-        padding: 0.35rem 0 0 !important;
+        padding: 0.35rem 0 env(safe-area-inset-bottom, 0px) !important;
         background: rgba(20, 20, 20, 0.98);
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
@@ -75,7 +75,10 @@ body {
         box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
         transform: none !important;
         -webkit-transform: none !important;
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
         overflow: visible;
+        touch-action: manipulation;
     }
     body > .pt-16,
     body .page-container,
@@ -84,7 +87,8 @@ body {
     body .actor-page,
     body .movie-detail-page,
     body .tv-channel-page,
-    body .watch-page {
+    body .watch-page,
+    body .movies-page-inner {
         padding-bottom: var(--mobile-nav-total-height) !important;
     }
     .site-footer-desktop {
