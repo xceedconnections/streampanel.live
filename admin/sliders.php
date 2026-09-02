@@ -585,4 +585,47 @@ if ($edit_slider_id) {
 
 <?php include __DIR__ . '/includes/slider-slide-form.php'; ?>
 
+<!-- Slides List -->
+<div class="bg-gray-900 rounded-lg p-6">
+    <h3 class="text-xl font-bold mb-4">Slides (<?php echo count($current_slides); ?>)</h3>
+    <?php if (empty($current_slides)): ?>
+    <p class="text-gray-400">No slides added yet. Add your first slide above.</p>
+    <?php else: ?>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <?php foreach ($current_slides as $slide): ?>
+        <div class="bg-gray-800 rounded-lg p-4">
+            <?php if ($slide['image_url']): ?>
+            <img src="<?php echo htmlspecialchars($slide['image_url']); ?>" alt="<?php echo htmlspecialchars($slide['title'] ?? 'Slide'); ?>"
+                 class="w-full h-40 object-cover rounded mb-3">
+            <?php endif; ?>
+            <h4 class="font-semibold mb-2"><?php echo htmlspecialchars($slide['title'] ?? 'Untitled Slide'); ?></h4>
+            <?php if ($slide['description']): ?>
+            <p class="text-sm text-gray-400 mb-2"><?php echo htmlspecialchars(substr($slide['description'], 0, 50)); ?><?php echo strlen($slide['description']) > 50 ? '...' : ''; ?></p>
+            <?php endif; ?>
+            <div class="text-xs text-gray-400 mb-2">
+                Link: <?php
+                if ($slide['link_type'] === 'movie') echo 'Movie #' . $slide['link_id'];
+                elseif ($slide['link_type'] === 'tv_show') echo 'TV Show #' . $slide['link_id'];
+                elseif ($slide['link_type'] === 'live_tv') echo 'Live TV #' . $slide['link_id'];
+                else echo 'Custom URL';
+                ?>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="px-2 py-1 rounded text-xs <?php echo $slide['is_active'] ? 'bg-green-900 text-green-200' : 'bg-gray-700 text-gray-300'; ?>">
+                    <?php echo $slide['is_active'] ? 'Active' : 'Inactive'; ?>
+                </span>
+                <div class="flex gap-2">
+                    <a href="?tab=sliders&slider_id=<?php echo $current_slider['id']; ?>&edit_slide=<?php echo $slide['id']; ?>"
+                       class="text-blue-400 hover:text-blue-300 text-sm">Edit</a>
+                    <a href="?tab=sliders&slider_id=<?php echo $current_slider['id']; ?>&delete_slide=<?php echo $slide['id']; ?>"
+                       onclick="return confirm('Delete this slide?')"
+                       class="text-red-400 hover:text-red-300 text-sm">Delete</a>
+                </div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+</div>
+
 <?php endif; ?>
