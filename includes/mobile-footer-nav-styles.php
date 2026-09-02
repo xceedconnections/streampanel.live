@@ -19,6 +19,9 @@ html {
     width: 100%;
     max-width: 100%;
     background: #000;
+    min-height: 100%;
+    min-height: -webkit-fill-available;
+    min-height: -moz-fill-available;
 }
 body {
     margin: 0;
@@ -27,6 +30,9 @@ body {
     max-width: 100%;
     overscroll-behavior-y: none;
     background: #000;
+    min-height: 100%;
+    min-height: -webkit-fill-available;
+    min-height: -moz-fill-available;
 }
 /* Hidden by default — desktop */
 .mobile-footer-nav {
@@ -73,12 +79,14 @@ body {
         min-height: var(--mobile-nav-height);
         box-sizing: border-box;
         box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
-        transform: none !important;
-        -webkit-transform: none !important;
         -webkit-backface-visibility: hidden;
         backface-visibility: hidden;
         overflow: visible;
         touch-action: manipulation;
+    }
+    html.ff-android-nav .mobile-footer-nav {
+        bottom: auto !important;
+        will-change: top, left, width;
     }
     body > .pt-16,
     body .page-container,
