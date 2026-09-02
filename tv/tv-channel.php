@@ -400,7 +400,7 @@ if ($channel) {
     <meta charset="UTF-8">
     
     <!-- Mobile Optimization -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-visual">
     <meta name="mobile-web-app-capable" content="yes">
     
     <!-- Primary Meta Tags -->
@@ -963,74 +963,6 @@ if ($channel) {
 }
 .error-banner-close:hover {
     color: #fde047;
-}
-
-/* Mobile Footer Navigation - pinned; global styles in header also apply */
-.mobile-footer-nav {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    top: auto !important;
-    background: rgba(20, 20, 20, 0.98);
-    backdrop-filter: blur(10px);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    padding: 0.5rem 0 calc(0.5rem + env(safe-area-inset-bottom, 0px));
-    z-index: 2147483000 !important;
-    height: calc(60px + env(safe-area-inset-bottom, 0px));
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
-    transform: translate3d(0, 0, 0);
-}
-@media (min-width: 768px) {
-    .mobile-footer-nav {
-        display: none !important;
-    }
-}
-.mobile-footer-nav .nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    padding: 0.5rem 0.75rem;
-    color: #9ca3af;
-    text-decoration: none;
-    transition: all 0.2s ease;
-    border-radius: 0.5rem;
-    min-width: 60px;
-    flex: 1;
-    max-width: 100px;
-}
-.mobile-footer-nav .nav-item svg {
-    width: 24px;
-    height: 24px;
-    stroke-width: 2;
-    transition: all 0.2s ease;
-}
-.mobile-footer-nav .nav-item span {
-    font-size: 0.7rem;
-    font-weight: 500;
-    transition: all 0.2s ease;
-}
-.mobile-footer-nav .nav-item:active {
-    transform: scale(0.95);
-}
-.mobile-footer-nav .nav-item.active,
-.mobile-footer-nav .nav-item:hover {
-    color: #e50914;
-    background: rgba(229, 9, 20, 0.1);
-}
-.mobile-footer-nav .nav-item.active svg,
-.mobile-footer-nav .nav-item:hover svg {
-    stroke-width: 2.5;
-    transform: scale(1.1);
-}
-.mobile-footer-nav .nav-item.active span,
-.mobile-footer-nav .nav-item:hover span {
-    font-weight: 600;
 }
 
 /* Channel Description */
