@@ -249,6 +249,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_slide'])) {
             $stmt->execute();
             $message = 'Slide updated successfully';
         } else {
+            // New slides: if order left at 0, append to end
+            if ($display_order <= 0) {
+                $maxRes = $conn->prepare('SELECT COALESCE(MAX(display_order), 0) AS m FROM slider_slides WHERE slider_id = ?');
+                $maxRes->bind_param('i', $slider_id);
+                $maxRes->execute();
+                $maxRow = $maxRes->get_result()->fetch_assoc();
+                $display_order = ((int) ($maxRow['m'] ?? 0)) + 1;
+            }
             $stmt = $conn->prepare("INSERT INTO slider_slides (slider_id, title, description, image_url, link_type, link_id, link_url, display_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->bind_param("issssssii", $slider_id, $title, $description, $image_url, $link_type, $link_id, $link_url, $display_order, $is_active);
             $stmt->execute();
@@ -587,44 +595,209 @@ if ($edit_slider_id) {
 
 <!-- Slides List -->
 <div class="bg-gray-900 rounded-lg p-6">
-    <h3 class="text-xl font-bold mb-4">Slides (<?php echo count($current_slides); ?>)</h3>
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+        <div>
+            <h3 class="text-xl font-bold">Slides (<?php echo count($current_slides); ?>)</h3>
+            <p class="text-sm text-gray-400 mt-1">Drag rows to reorder, or set Priority (1 = first on homepage). Lower number shows first.</p>
+        </div>
+        <?php if (!empty($current_slides)): ?>
+        <button type="button" id="saveSlideOrderBtn" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-semibold">
+            <i class="fas fa-save mr-1"></i> Save Order
+        </button>
+        <?php endif; ?>
+    </div>
+
+    <?php if (isset($_GET['reordered'])): ?>
+    <div class="bg-green-900 bg-opacity-50 border border-green-700 text-green-200 px-4 py-3 rounded mb-4 text-sm">
+        Slide order saved.
+    </div>
+    <?php endif; ?>
+
     <?php if (empty($current_slides)): ?>
     <p class="text-gray-400">No slides added yet. Add your first slide above.</p>
     <?php else: ?>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <?php foreach ($current_slides as $slide): ?>
-        <div class="bg-gray-800 rounded-lg p-4">
-            <?php if ($slide['image_url']): ?>
-            <img src="<?php echo htmlspecialchars($slide['image_url']); ?>" alt="<?php echo htmlspecialchars($slide['title'] ?? 'Slide'); ?>"
-                 class="w-full h-40 object-cover rounded mb-3">
-            <?php endif; ?>
-            <h4 class="font-semibold mb-2"><?php echo htmlspecialchars($slide['title'] ?? 'Untitled Slide'); ?></h4>
-            <?php if ($slide['description']): ?>
-            <p class="text-sm text-gray-400 mb-2"><?php echo htmlspecialchars(substr($slide['description'], 0, 50)); ?><?php echo strlen($slide['description']) > 50 ? '...' : ''; ?></p>
-            <?php endif; ?>
-            <div class="text-xs text-gray-400 mb-2">
-                Link: <?php
-                if ($slide['link_type'] === 'movie') echo 'Movie #' . $slide['link_id'];
-                elseif ($slide['link_type'] === 'tv_show') echo 'TV Show #' . $slide['link_id'];
-                elseif ($slide['link_type'] === 'live_tv') echo 'Live TV #' . $slide['link_id'];
-                else echo 'Custom URL';
-                ?>
-            </div>
-            <div class="flex items-center justify-between">
-                <span class="px-2 py-1 rounded text-xs <?php echo $slide['is_active'] ? 'bg-green-900 text-green-200' : 'bg-gray-700 text-gray-300'; ?>">
-                    <?php echo $slide['is_active'] ? 'Active' : 'Inactive'; ?>
-                </span>
-                <div class="flex gap-2">
-                    <a href="?tab=sliders&slider_id=<?php echo $current_slider['id']; ?>&edit_slide=<?php echo $slide['id']; ?>"
+    <form method="POST" action="?tab=sliders&slider_id=<?php echo (int) $current_slider['id']; ?>" id="slideOrderForm">
+        <input type="hidden" name="reorder_slides" value="1">
+        <input type="hidden" name="slider_id" value="<?php echo (int) $current_slider['id']; ?>">
+        <div id="slidesSortable" class="space-y-3">
+            <?php foreach ($current_slides as $index => $slide): ?>
+            <?php $prio = (int) ($slide['display_order'] ?? ($index + 1)); if ($prio <= 0) $prio = $index + 1; ?>
+            <div class="slide-sort-item bg-gray-800 rounded-lg p-3 border border-gray-700 flex flex-col md:flex-row gap-3 md:items-center"
+                 draggable="true"
+                 data-slide-id="<?php echo (int) $slide['id']; ?>">
+                <div class="flex items-center gap-3 flex-shrink-0">
+                    <button type="button" class="drag-handle cursor-grab active:cursor-grabbing text-gray-400 hover:text-white px-2" title="Drag to reorder" aria-label="Drag">
+                        <i class="fas fa-grip-vertical text-lg"></i>
+                    </button>
+                    <span class="slide-pos-badge bg-netflix-red text-white text-xs font-bold rounded px-2 py-1 min-w-[2rem] text-center">#<?php echo $index + 1; ?></span>
+                    <label class="text-xs text-gray-400 flex items-center gap-1">
+                        Priority
+                        <input type="number" min="1" step="1"
+                               name="slide_priorities[<?php echo (int) $slide['id']; ?>]"
+                               value="<?php echo $prio; ?>"
+                               class="slide-priority-input w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white text-sm">
+                    </label>
+                </div>
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                    <?php if (!empty($slide['image_url'])): ?>
+                    <img src="<?php echo htmlspecialchars($slide['image_url']); ?>" alt=""
+                         class="w-20 h-12 object-cover rounded flex-shrink-0 bg-black">
+                    <?php else: ?>
+                    <div class="w-20 h-12 rounded bg-gray-700 flex-shrink-0"></div>
+                    <?php endif; ?>
+                    <div class="min-w-0 flex-1">
+                        <div class="font-semibold truncate"><?php echo htmlspecialchars($slide['title'] ?? 'Untitled Slide'); ?></div>
+                        <div class="text-xs text-gray-400">
+                            <?php
+                            if ($slide['link_type'] === 'movie') echo 'Movie';
+                            elseif ($slide['link_type'] === 'tv_show') echo 'TV Show';
+                            elseif ($slide['link_type'] === 'live_tv') echo 'Live TV';
+                            else echo 'Custom URL';
+                            echo $slide['is_active'] ? ' · Active' : ' · Inactive';
+                            ?>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-3 flex-shrink-0">
+                    <a href="?tab=sliders&slider_id=<?php echo (int) $current_slider['id']; ?>&edit_slide=<?php echo (int) $slide['id']; ?>"
                        class="text-blue-400 hover:text-blue-300 text-sm">Edit</a>
-                    <a href="?tab=sliders&slider_id=<?php echo $current_slider['id']; ?>&delete_slide=<?php echo $slide['id']; ?>"
+                    <a href="?tab=sliders&slider_id=<?php echo (int) $current_slider['id']; ?>&delete_slide=<?php echo (int) $slide['id']; ?>"
                        onclick="return confirm('Delete this slide?')"
                        class="text-red-400 hover:text-red-300 text-sm">Delete</a>
                 </div>
+                <input type="hidden" class="slide-order-input" name="slide_order[]" value="<?php echo (int) $slide['id']; ?>">
             </div>
+            <?php endforeach; ?>
         </div>
-        <?php endforeach; ?>
-    </div>
+    </form>
+
+    <style>
+    .slide-sort-item.dragging { opacity: 0.5; border-color: #e50914; }
+    .slide-sort-item.drag-over { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.35); }
+    </style>
+    <script>
+    (function () {
+        const list = document.getElementById('slidesSortable');
+        const form = document.getElementById('slideOrderForm');
+        const saveBtn = document.getElementById('saveSlideOrderBtn');
+        if (!list || !form) return;
+
+        let dragEl = null;
+
+        function refreshPositions() {
+            const items = Array.from(list.querySelectorAll('.slide-sort-item'));
+            items.forEach(function (item, idx) {
+                const badge = item.querySelector('.slide-pos-badge');
+                const prio = item.querySelector('.slide-priority-input');
+                const orderInput = item.querySelector('.slide-order-input');
+                if (badge) badge.textContent = '#' + (idx + 1);
+                if (prio) prio.value = String(idx + 1);
+                if (orderInput) orderInput.value = item.getAttribute('data-slide-id');
+            });
+        }
+
+        function syncOrderFromPriorities() {
+            const items = Array.from(list.querySelectorAll('.slide-sort-item'));
+            items.sort(function (a, b) {
+                const pa = parseInt(a.querySelector('.slide-priority-input').value, 10) || 9999;
+                const pb = parseInt(b.querySelector('.slide-priority-input').value, 10) || 9999;
+                if (pa !== pb) return pa - pb;
+                return 0;
+            });
+            items.forEach(function (item) { list.appendChild(item); });
+            refreshPositions();
+        }
+
+        list.querySelectorAll('.slide-sort-item').forEach(function (item) {
+            item.addEventListener('dragstart', function (e) {
+                dragEl = item;
+                item.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', item.getAttribute('data-slide-id')); } catch (err) {}
+            });
+            item.addEventListener('dragend', function () {
+                item.classList.remove('dragging');
+                list.querySelectorAll('.slide-sort-item').forEach(function (el) { el.classList.remove('drag-over'); });
+                dragEl = null;
+                refreshPositions();
+            });
+            item.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (!dragEl || dragEl === item) return;
+                item.classList.add('drag-over');
+                const rect = item.getBoundingClientRect();
+                const before = (e.clientY - rect.top) < rect.height / 2;
+                if (before) {
+                    list.insertBefore(dragEl, item);
+                } else {
+                    list.insertBefore(dragEl, item.nextSibling);
+                }
+            });
+            item.addEventListener('dragleave', function () {
+                item.classList.remove('drag-over');
+            });
+            item.addEventListener('drop', function (e) {
+                e.preventDefault();
+                item.classList.remove('drag-over');
+                refreshPositions();
+            });
+
+            const handle = item.querySelector('.drag-handle');
+            if (handle) {
+                handle.addEventListener('mousedown', function () { item.setAttribute('draggable', 'true'); });
+            }
+
+            const prioInput = item.querySelector('.slide-priority-input');
+            if (prioInput) {
+                prioInput.addEventListener('change', function () {
+                    syncOrderFromPriorities();
+                });
+                // Don't start drag when editing priority
+                prioInput.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+                prioInput.addEventListener('focus', function () { item.setAttribute('draggable', 'false'); });
+                prioInput.addEventListener('blur', function () { item.setAttribute('draggable', 'true'); });
+            }
+        });
+
+        function saveOrder(viaAjax) {
+            refreshPositions();
+            if (!viaAjax) {
+                form.submit();
+                return;
+            }
+            const fd = new FormData(form);
+            fd.set('ajax', '1');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving…';
+            fetch(form.getAttribute('action') || window.location.href, {
+                method: 'POST',
+                body: fd,
+                headers: { 'Accept': 'application/json' }
+            }).then(function (r) { return r.json(); })
+              .then(function (data) {
+                  saveBtn.disabled = false;
+                  saveBtn.innerHTML = '<i class="fas fa-save mr-1"></i> Save Order';
+                  if (data && data.success) {
+                      const note = document.createElement('div');
+                      note.className = 'bg-green-900 bg-opacity-50 border border-green-700 text-green-200 px-4 py-3 rounded mb-4 text-sm';
+                      note.textContent = 'Slide order saved.';
+                      form.parentNode.insertBefore(note, form);
+                      setTimeout(function () { note.remove(); }, 2500);
+                  } else {
+                      alert('Could not save order');
+                  }
+              }).catch(function () {
+                  // Fallback to normal form submit
+                  form.submit();
+              });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function () { saveOrder(true); });
+        }
+    })();
+    </script>
     <?php endif; ?>
 </div>
 

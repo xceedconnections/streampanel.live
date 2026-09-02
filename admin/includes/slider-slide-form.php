@@ -88,9 +88,10 @@ $curLiveLabel = ($curType === 'live_tv' && $curLinkId) ? $findTitle($live_tv_cha
                        class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
             </div>
             <div>
-                <label class="block text-sm font-semibold mb-2">Display Order</label>
-                <input type="number" name="slide_display_order" value="<?php echo (int) ($edit_slide['display_order'] ?? 0); ?>"
-                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                <label class="block text-sm font-semibold mb-2">Priority <span class="text-gray-500 font-normal">(1 = first; leave blank to append)</span></label>
+                <input type="number" name="slide_display_order" min="0" value="<?php echo (int) ($edit_slide['display_order'] ?? 0); ?>"
+                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white"
+                       placeholder="0 = auto">
             </div>
         </div>
 
