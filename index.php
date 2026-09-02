@@ -4,9 +4,11 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
 require_once __DIR__ . '/includes/movie_helpers.php';
+require_once __DIR__ . '/includes/movies_schema.php';
 
 $page_title = "Home";
 $conn = getDBConnection();
+ensureMoviesSchema($conn);
 
 // Check which sections are enabled
 $enable_movies = isSectionEnabled($conn, 'movies');
@@ -40,21 +42,30 @@ $all_movies = [];
 $popular_movies = [];
 
 if ($enable_movies) {
+    // Homepage big banner: ONLY movies with show_in_slider checked (and active)
     $slider_movies = $conn->query(
         "SELECT * FROM movies
-         WHERE show_in_slider = 1 AND (is_active = 1 OR is_active IS NULL)
-         ORDER BY rating DESC, created_at DESC
+         WHERE COALESCE(show_in_slider, 0) = 1
+           AND COALESCE(is_active, 1) = 1
+         ORDER BY updated_at DESC, rating DESC, id DESC
          LIMIT 20"
     )->fetch_all(MYSQLI_ASSOC);
 
+    // Homepage featured row: ONLY movies with featured checked (and active)
     $featured_movies = $conn->query(
         "SELECT * FROM movies
-         WHERE featured = 1 AND (is_active = 1 OR is_active IS NULL)
-         ORDER BY rating DESC, created_at DESC
+         WHERE COALESCE(featured, 0) = 1
+           AND COALESCE(is_active, 1) = 1
+         ORDER BY rating DESC, updated_at DESC, id DESC
          LIMIT 20"
     )->fetch_all(MYSQLI_ASSOC);
 
-    $all_movies = $conn->query("SELECT * FROM movies WHERE (is_active = 1 OR is_active IS NULL) ORDER BY views DESC, created_at DESC LIMIT 30")->fetch_all(MYSQLI_ASSOC);
+    $all_movies = $conn->query(
+        "SELECT * FROM movies
+         WHERE COALESCE(is_active, 1) = 1
+         ORDER BY views DESC, created_at DESC
+         LIMIT 30"
+    )->fetch_all(MYSQLI_ASSOC);
     $popular_movies = array_filter($all_movies, function ($m) {
         return empty($m['featured']) && empty($m['show_in_slider']);
     });

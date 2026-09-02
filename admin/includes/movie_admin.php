@@ -13,13 +13,16 @@ function saveMovieFromRequest($conn, ?int $movieId = null): array
     $duration = intval($_POST['duration'] ?? 0);
     $release_year = intval($_POST['release_year'] ?? date('Y'));
     $rating = floatval($_POST['rating'] ?? 0);
-    $category_id = intval($_POST['category_id'] ?? 0) ?: null;
+    $category_id = intval($_POST['category_id'] ?? 0);
+    if ($category_id <= 0) {
+        $category_id = 0; // never bind null as int (corrupts later fields on some PHP/mysqli)
+    }
     $featured = isset($_POST['featured']) ? 1 : 0;
     $is_active = isset($_POST['is_active']) ? 1 : 0;
     $is_free = isset($_POST['is_free']) ? 1 : 0;
     $is_premium = isset($_POST['is_premium']) ? 1 : 0;
     $show_in_slider = isset($_POST['show_in_slider']) ? 1 : 0;
-    $tmdb_id = !empty($_POST['tmdb_id']) ? intval($_POST['tmdb_id']) : null;
+    $tmdb_id = !empty($_POST['tmdb_id']) ? intval($_POST['tmdb_id']) : 0;
     $backdrop = sanitize($_POST['backdrop'] ?? '');
     $trailer_url = sanitize($_POST['trailer_url'] ?? '');
     $director = sanitize($_POST['director'] ?? '');
@@ -104,40 +107,73 @@ function saveMovieFromRequest($conn, ?int $movieId = null): array
     $downloadLinksJson = encodeDownloadLinks($download_links);
     $slug = getUniqueSlug($conn, 'movies', $title, $movieId);
 
+    // Keep nullable ints out of the big bind_param (null/0 breaks flags or FK)
     if ($movieId) {
-        $stmt = $conn->prepare('UPDATE movies SET title=?, description=?, thumbnail=?, poster=?, backdrop=?, duration=?, release_year=?, rating=?, category_id=?, featured=?, is_active=?, is_free=?, is_premium=?, show_in_slider=?, tmdb_id=?, slug=?, sources=?, download_links=?, director=?, tags=?, quality_label=?, cast_data=?, genres=? WHERE id=?');
+        $stmt = $conn->prepare('UPDATE movies SET title=?, description=?, thumbnail=?, poster=?, backdrop=?, duration=?, release_year=?, rating=?, featured=?, is_active=?, is_free=?, is_premium=?, show_in_slider=?, slug=?, sources=?, download_links=?, director=?, tags=?, quality_label=?, cast_data=?, genres=? WHERE id=?');
         if (!$stmt) {
             return ['success' => false, 'message' => 'Error preparing statement: ' . $conn->error, 'id' => $movieId];
         }
-        $stmt->bind_param('sssssiidiiiiiiissssssssi', $title, $description, $thumbnail, $poster, $backdrop, $duration, $release_year, $rating, $category_id, $featured, $is_active, $is_free, $is_premium, $show_in_slider, $tmdb_id, $slug, $sourcesJson, $downloadLinksJson, $director, $tags, $quality_label, $cast_data, $genres, $movieId);
+        $stmt->bind_param('sssssiidiiiiissssssssi', $title, $description, $thumbnail, $poster, $backdrop, $duration, $release_year, $rating, $featured, $is_active, $is_free, $is_premium, $show_in_slider, $slug, $sourcesJson, $downloadLinksJson, $director, $tags, $quality_label, $cast_data, $genres, $movieId);
         if (!$stmt->execute()) {
             return ['success' => false, 'message' => 'Error updating movie: ' . $stmt->error, 'id' => $movieId];
         }
-        $tstmt = $conn->prepare('UPDATE movies SET trailer_url = ? WHERE id = ?');
-        if ($tstmt) {
-            $tstmt->bind_param('si', $trailer_url, $movieId);
-            $tstmt->execute();
+        $savedId = $movieId;
+    } else {
+        $stmt = $conn->prepare('INSERT INTO movies (title, description, thumbnail, poster, backdrop, duration, release_year, rating, featured, is_active, is_free, is_premium, show_in_slider, slug, sources, download_links, director, tags, quality_label, cast_data, genres) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Error preparing statement: ' . $conn->error, 'id' => null];
         }
-        return ['success' => true, 'message' => 'Movie updated successfully', 'id' => $movieId];
+        $stmt->bind_param('sssssiidiiiiissssssss', $title, $description, $thumbnail, $poster, $backdrop, $duration, $release_year, $rating, $featured, $is_active, $is_free, $is_premium, $show_in_slider, $slug, $sourcesJson, $downloadLinksJson, $director, $tags, $quality_label, $cast_data, $genres);
+        if (!$stmt->execute()) {
+            return ['success' => false, 'message' => 'Error adding movie: ' . $stmt->error, 'id' => null];
+        }
+        $savedId = (int) $conn->insert_id;
     }
 
-    $stmt = $conn->prepare('INSERT INTO movies (title, description, thumbnail, poster, backdrop, duration, release_year, rating, category_id, featured, is_active, is_free, is_premium, show_in_slider, tmdb_id, slug, sources, download_links, director, tags, quality_label, cast_data, genres) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    if (!$stmt) {
-        return ['success' => false, 'message' => 'Error preparing statement: ' . $conn->error, 'id' => null];
+    if ($savedId <= 0) {
+        return ['success' => false, 'message' => 'Save failed: missing movie id', 'id' => null];
     }
-    $stmt->bind_param('sssssiidiiiiiiissssssss', $title, $description, $thumbnail, $poster, $backdrop, $duration, $release_year, $rating, $category_id, $featured, $is_active, $is_free, $is_premium, $show_in_slider, $tmdb_id, $slug, $sourcesJson, $downloadLinksJson, $director, $tags, $quality_label, $cast_data, $genres);
-    if (!$stmt->execute()) {
-        return ['success' => false, 'message' => 'Error adding movie: ' . $stmt->error, 'id' => null];
-    }
-    $newId = (int) $conn->insert_id;
-    if ($newId > 0) {
-        $tstmt = $conn->prepare('UPDATE movies SET trailer_url = ? WHERE id = ?');
-        if ($tstmt) {
-            $tstmt->bind_param('si', $trailer_url, $newId);
-            $tstmt->execute();
+
+    // Force homepage flags in a separate update so slider/featured always stick
+    $flagStmt = $conn->prepare('UPDATE movies SET featured = ?, is_active = ?, is_free = ?, is_premium = ?, show_in_slider = ? WHERE id = ?');
+    if ($flagStmt) {
+        $flagStmt->bind_param('iiiiii', $featured, $is_active, $is_free, $is_premium, $show_in_slider, $savedId);
+        if (!$flagStmt->execute()) {
+            return ['success' => false, 'message' => 'Error saving homepage flags: ' . $flagStmt->error, 'id' => $savedId];
         }
     }
-    return ['success' => true, 'message' => 'Movie added successfully', 'id' => $newId];
+
+    if ($category_id > 0) {
+        $cstmt = $conn->prepare('UPDATE movies SET category_id = ? WHERE id = ?');
+        if ($cstmt) {
+            $cstmt->bind_param('ii', $category_id, $savedId);
+            $cstmt->execute();
+        }
+    } else {
+        $conn->query('UPDATE movies SET category_id = NULL WHERE id = ' . (int) $savedId);
+    }
+
+    if ($tmdb_id > 0) {
+        $tmdbStmt = $conn->prepare('UPDATE movies SET tmdb_id = ? WHERE id = ?');
+        if ($tmdbStmt) {
+            $tmdbStmt->bind_param('ii', $tmdb_id, $savedId);
+            $tmdbStmt->execute();
+        }
+    } else {
+        $conn->query('UPDATE movies SET tmdb_id = NULL WHERE id = ' . (int) $savedId);
+    }
+
+    $tstmt = $conn->prepare('UPDATE movies SET trailer_url = ? WHERE id = ?');
+    if ($tstmt) {
+        $tstmt->bind_param('si', $trailer_url, $savedId);
+        $tstmt->execute();
+    }
+
+    return [
+        'success' => true,
+        'message' => $movieId ? 'Movie updated successfully' : 'Movie added successfully',
+        'id' => $savedId,
+    ];
 }
 
 function getMovieConcurrentViewers($conn, int $movieId): int

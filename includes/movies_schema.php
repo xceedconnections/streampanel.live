@@ -19,6 +19,11 @@ function ensureMoviesSchema($conn): void
         'backdrop' => "VARCHAR(500) NULL COMMENT 'TMDB banner/backdrop URL'",
         'download_links' => "TEXT NULL COMMENT 'JSON download links'",
         'trailer_url' => "VARCHAR(500) NULL COMMENT 'YouTube or embed trailer URL'",
+        'show_in_slider' => "TINYINT(1) DEFAULT 0 COMMENT 'Show in homepage slider'",
+        'featured' => "TINYINT(1) DEFAULT 0",
+        'is_active' => "TINYINT(1) DEFAULT 1",
+        'is_free' => "TINYINT(1) DEFAULT 1",
+        'is_premium' => "TINYINT(1) DEFAULT 0",
     ];
 
     foreach ($columns as $column => $definition) {
