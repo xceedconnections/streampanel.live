@@ -26,6 +26,48 @@ if (!in_array($tab, $validTabs)) {
     $tab = 'dashboard';
 }
 
+// Handle movies banner/delete/edit redirects BEFORE any output (to avoid header errors)
+if ($tab === 'movies') {
+    require_once __DIR__ . '/../includes/movies_schema.php';
+    ensureMoviesSchema($conn);
+
+    if (isset($_GET['delete'])) {
+        $id = (int) $_GET['delete'];
+        $stmt = $conn->prepare('DELETE FROM movies WHERE id = ?');
+        if ($stmt) {
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+        }
+        header('Location: ?tab=movies');
+        exit;
+    }
+
+    if (isset($_GET['slider_on'])) {
+        $id = (int) $_GET['slider_on'];
+        $conn->query('UPDATE movies SET show_in_slider = 1, is_active = 1 WHERE id = ' . $id);
+        header('Location: ?tab=movies&banner=1');
+        exit;
+    }
+
+    if (isset($_GET['slider_off'])) {
+        $id = (int) $_GET['slider_off'];
+        $conn->query('UPDATE movies SET show_in_slider = 0 WHERE id = ' . $id);
+        header('Location: ?tab=movies&banner=1');
+        exit;
+    }
+
+    if (isset($_GET['slider_clear_all'])) {
+        $conn->query('UPDATE movies SET show_in_slider = 0');
+        header('Location: ?tab=movies&banner=1');
+        exit;
+    }
+
+    if (isset($_GET['edit'])) {
+        header('Location: ?tab=edit-movie&id=' . (int) $_GET['edit']);
+        exit;
+    }
+}
+
 // Handle coupons actions BEFORE any output (to avoid header errors)
 if ($tab === 'coupons') {
     // Handle delete action

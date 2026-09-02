@@ -14,37 +14,42 @@ ensureMoviesSchema($conn);
 $message = '';
 $message_type = '';
 
+// Redirect helpers for actions that may run after layout output started
+$adminRedirect = static function (string $url): void {
+    if (!headers_sent()) {
+        header('Location: ' . $url);
+        exit;
+    }
+    echo '<script>window.location.href=' . json_encode($url) . ';</script>';
+    exit;
+};
+
+// Actions are primarily handled early in admin/index.php; keep JS fallback here
 if (isset($_GET['delete'])) {
     $id = (int) $_GET['delete'];
     $stmt = $conn->prepare('DELETE FROM movies WHERE id = ?');
     $stmt->bind_param('i', $id);
     $stmt->execute();
-    header('Location: ?tab=movies');
-    exit;
+    $adminRedirect('?tab=movies');
 }
 
-// Direct homepage banner toggles (bypasses full movie form)
 if (isset($_GET['slider_on'])) {
     $id = (int) $_GET['slider_on'];
     $conn->query('UPDATE movies SET show_in_slider = 1, is_active = 1 WHERE id = ' . $id);
-    header('Location: ?tab=movies&banner=1');
-    exit;
+    $adminRedirect('?tab=movies&banner=1');
 }
 if (isset($_GET['slider_off'])) {
     $id = (int) $_GET['slider_off'];
     $conn->query('UPDATE movies SET show_in_slider = 0 WHERE id = ' . $id);
-    header('Location: ?tab=movies&banner=1');
-    exit;
+    $adminRedirect('?tab=movies&banner=1');
 }
 if (isset($_GET['slider_clear_all'])) {
     $conn->query('UPDATE movies SET show_in_slider = 0');
-    header('Location: ?tab=movies&banner=1');
-    exit;
+    $adminRedirect('?tab=movies&banner=1');
 }
 
 if (isset($_GET['edit'])) {
-    header('Location: ?tab=edit-movie&id=' . (int) $_GET['edit']);
-    exit;
+    $adminRedirect('?tab=edit-movie&id=' . (int) $_GET['edit']);
 }
 
 if (isset($_POST['bulk_action'])) {
