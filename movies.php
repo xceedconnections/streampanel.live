@@ -25,10 +25,51 @@ if (!isSectionEnabled($conn, 'movies')) {
 }
 
 $category = $_GET['category'] ?? '';
-$search = $_GET['search'] ?? '';
-$page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
+$search = trim($_GET['search'] ?? '');
+$year = isset($_GET['year']) ? (int) $_GET['year'] : 0;
+$letter = isset($_GET['letter']) ? strtoupper(substr(trim($_GET['letter']), 0, 1)) : '';
+if ($letter !== '' && $letter !== '#' && !preg_match('/^[A-Z]$/', $letter)) {
+    $letter = '';
+}
+$page = max(1, isset($_GET['page']) ? (int) $_GET['page'] : 1);
 $per_page = 12;
-$movies_per_row = 7;
+
+function moviesFilterUrl(array $overrides = []): string
+{
+    global $category, $search, $year, $letter, $page;
+
+    $params = [];
+    if ($category !== '') {
+        $params['category'] = $category;
+    }
+    if ($search !== '') {
+        $params['search'] = $search;
+    }
+    if ($year > 0) {
+        $params['year'] = $year;
+    }
+    if ($letter !== '') {
+        $params['letter'] = $letter;
+    }
+    if ($page > 1) {
+        $params['page'] = $page;
+    }
+
+    foreach ($overrides as $key => $value) {
+        if ($value === null || $value === '' || $value === 0) {
+            unset($params[$key]);
+        } else {
+            $params[$key] = $value;
+        }
+    }
+
+    if (isset($params['page']) && (int) $params['page'] <= 1) {
+        unset($params['page']);
+    }
+
+    $qs = http_build_query($params);
+    return BASE_URL . '/movies' . ($qs ? '?' . $qs : '');
+}
 
 $query = "SELECT m.*, c.name AS category_name, c.slug AS category_slug
           FROM movies m
@@ -43,7 +84,23 @@ if ($category) {
     $types .= 's';
 }
 
-if ($search) {
+if ($year > 0) {
+    $query .= " AND m.release_year = ?";
+    $params[] = $year;
+    $types .= 'i';
+}
+
+if ($letter !== '') {
+    if ($letter === '#') {
+        $query .= " AND m.title REGEXP '^[^A-Za-z]'";
+    } else {
+        $query .= " AND m.title LIKE ?";
+        $params[] = $letter . '%';
+        $types .= 's';
+    }
+}
+
+if ($search !== '') {
     $query .= " AND (m.title LIKE ? OR m.description LIKE ? OR c.name LIKE ? OR LOWER(COALESCE(m.cast_data, '')) LIKE ?)";
     $search_param = "%$search%";
     $search_like = '%' . strtolower($search) . '%';
@@ -66,7 +123,8 @@ if (!empty($params)) {
     $total_movies = (int) $conn->query($count_query)->fetch_assoc()['total'];
 }
 
-if ($category && !$search) {
+$use_pagination = $search === '';
+if ($use_pagination) {
     $offset = ($page - 1) * $per_page;
     $query .= " LIMIT $per_page OFFSET $offset";
 }
@@ -79,7 +137,7 @@ $stmt->execute();
 $movies = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 $search_actors = [];
-if ($search) {
+if ($search !== '') {
     $search_actors = searchActors($conn, $search, 24);
 }
 
@@ -91,25 +149,16 @@ FROM categories c
 HAVING movie_count > 0
 ORDER BY c.name ASC")->fetch_all(MYSQLI_ASSOC);
 
-$category_counts = [];
-foreach ($categories as $cat) {
-    $category_counts[$cat['slug']] = (int) $cat['movie_count'];
-}
+$years = $conn->query(
+    "SELECT m.release_year, COUNT(*) AS movie_count
+     FROM movies m
+     WHERE (m.is_active = 1 OR m.is_active IS NULL)
+       AND m.release_year IS NOT NULL AND m.release_year > 0
+     GROUP BY m.release_year
+     ORDER BY m.release_year DESC"
+)->fetch_all(MYSQLI_ASSOC);
 
-$movies_by_category = [];
-if (!$category || $search) {
-    foreach ($movies as $movie) {
-        $catName = $movie['category_name'] ?? 'Other';
-        $catSlug = $movie['category_slug'] ?? 'other';
-        if (!isset($movies_by_category[$catName])) {
-            $movies_by_category[$catName] = [
-                'slug' => $catSlug,
-                'movies' => [],
-            ];
-        }
-        $movies_by_category[$catName]['movies'][] = $movie;
-    }
-}
+$alphabet = array_merge(['#'], range('A', 'Z'));
 
 $active_category_name = '';
 if ($category) {
@@ -133,20 +182,190 @@ include 'includes/header.php';
     padding: 2rem 0;
 }
 .page-header {
-    padding: 0 1.5rem 2rem;
+    padding: 0 0 2rem;
+}
+.movies-page-inner {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
 }
 @media (min-width: 768px) {
-    .page-header {
-        padding: 0 3rem 2rem;
+    .movies-page-inner {
+        padding-left: 3rem;
+        padding-right: 3rem;
     }
 }
 .movies-section {
-    padding: 0 1.5rem 2rem;
+    padding: 0 0 2rem;
 }
-@media (min-width: 768px) {
-    .movies-section {
-        padding: 0 3rem 2rem;
+.movies-archive-layout {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+    padding-bottom: 2rem;
+}
+.movies-main {
+    flex: 1;
+    min-width: 0;
+}
+.movies-sidebar-right {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    width: 34px;
+    padding: 0.5rem 0.15rem;
+    background: rgba(0, 0, 0, 0.88);
+    border: 1px solid #2a2a2a;
+    z-index: 40;
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+}
+.movies-sidebar-right::-webkit-scrollbar {
+    width: 4px;
+}
+.movies-sidebar-right::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 4px;
+}
+@media (max-width: 1023px) {
+    .movies-sidebar-right {
+        position: fixed;
+        right: 0;
+        top: 4.5rem;
+        bottom: 4.5rem;
+        overflow-y: auto;
+        border-radius: 0.35rem 0 0 0.35rem;
+        border-right: none;
     }
+    .movies-main {
+        padding-right: 2.25rem;
+    }
+}
+@media (min-width: 1024px) {
+    .movies-sidebar-right {
+        position: sticky;
+        top: 5.5rem;
+        max-height: calc(100vh - 7rem);
+        overflow-y: auto;
+        border-radius: 0.35rem;
+        width: 38px;
+    }
+}
+.movies-sidebar-title {
+    display: none;
+}
+.movies-alpha-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.movies-alpha-list li {
+    width: 100%;
+    margin: 0;
+}
+.movies-alpha-link {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 0.12rem 0;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: #8b8b8b;
+    text-decoration: none;
+    line-height: 1.35;
+    transition: color 0.15s;
+}
+.movies-alpha-link:hover {
+    color: #fff;
+    text-decoration: none;
+}
+.movies-alpha-link.active {
+    color: #e50914;
+    font-weight: 700;
+}
+.movies-alpha-clear {
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid #2a2a2a;
+    font-size: 0.625rem !important;
+}
+.movies-filters-mobile {
+    display: block;
+    margin-bottom: 1rem;
+}
+@media (min-width: 1024px) {
+    .movies-filters-mobile {
+        display: none;
+    }
+}
+.movies-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.movies-year-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.movies-year-filter label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #9ca3af;
+    white-space: nowrap;
+}
+.movies-years-select {
+    width: 100%;
+    min-width: 160px;
+    background: #111;
+    border: 1px solid #333;
+    color: #fff;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+.movies-filters-mobile .movies-sidebar-title {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #9ca3af;
+    margin-bottom: 0.5rem;
+}
+.movies-active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+.movies-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #1f2937;
+    border: 1px solid #374151;
+    color: #e5e7eb;
+    font-size: 0.8125rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 9999px;
+    text-decoration: none;
+}
+.movies-filter-chip:hover {
+    border-color: #e50914;
+    color: #fff;
+    text-decoration: none;
 }
 .movies-section-title {
     font-size: 1.5rem;
@@ -164,7 +383,6 @@ include 'includes/header.php';
 @media (min-width: 640px) {
     .movie-grid {
         grid-template-columns: repeat(4, 1fr);
-        gap: 0.875rem;
     }
 }
 @media (min-width: 768px) {
@@ -289,7 +507,7 @@ include 'includes/header.php';
 .movie-card-play-icon {
     background: #e50914;
     border-radius: 50%;
-    padding: 0.75rem;
+    padding: 0.55rem;
     color: #fff;
     display: flex;
     align-items: center;
@@ -440,6 +658,57 @@ function renderMovieGridCard(array $movie, mysqli $conn): void
     </a>
     <?php
 }
+
+function renderMoviesPagination(int $totalMovies, int $perPage, int $currentPage): void
+{
+    if ($totalMovies <= $perPage) {
+        return;
+    }
+
+    $totalPages = (int) ceil($totalMovies / $perPage);
+    $startPage = max(1, $currentPage - 2);
+    $endPage = min($totalPages, $currentPage + 2);
+    ?>
+    <div class="flex justify-center items-center gap-2 mt-8 flex-wrap">
+        <?php if ($currentPage > 1): ?>
+        <a href="<?php echo htmlspecialchars(moviesFilterUrl(['page' => $currentPage - 1])); ?>"
+           class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">
+            <i class="fas fa-chevron-left mr-2"></i>Previous
+        </a>
+        <?php endif; ?>
+
+        <div class="flex gap-2 flex-wrap justify-center">
+            <?php if ($startPage > 1): ?>
+                <a href="<?php echo htmlspecialchars(moviesFilterUrl(['page' => 1])); ?>"
+                   class="px-4 py-2 rounded-lg <?php echo $currentPage === 1 ? 'bg-netflix-red' : 'bg-gray-800 hover:bg-gray-700'; ?>">1</a>
+                <?php if ($startPage > 2): ?><span class="px-2 py-2 text-gray-400">...</span><?php endif; ?>
+            <?php endif; ?>
+
+            <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+            <a href="<?php echo htmlspecialchars(moviesFilterUrl(['page' => $i])); ?>"
+               class="px-4 py-2 rounded-lg <?php echo $currentPage === $i ? 'bg-netflix-red' : 'bg-gray-800 hover:bg-gray-700'; ?>">
+                <?php echo $i; ?>
+            </a>
+            <?php endfor; ?>
+
+            <?php if ($endPage < $totalPages): ?>
+                <?php if ($endPage < $totalPages - 1): ?><span class="px-2 py-2 text-gray-400">...</span><?php endif; ?>
+                <a href="<?php echo htmlspecialchars(moviesFilterUrl(['page' => $totalPages])); ?>"
+                   class="px-4 py-2 rounded-lg <?php echo $currentPage === $totalPages ? 'bg-netflix-red' : 'bg-gray-800 hover:bg-gray-700'; ?>">
+                    <?php echo $totalPages; ?>
+                </a>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($currentPage < $totalPages): ?>
+        <a href="<?php echo htmlspecialchars(moviesFilterUrl(['page' => $currentPage + 1])); ?>"
+           class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">
+            Next<i class="fas fa-chevron-right ml-2"></i>
+        </a>
+        <?php endif; ?>
+    </div>
+    <?php
+}
 ?>
 
 <div class="page-container animate-in fade-in">
@@ -448,6 +717,7 @@ function renderMovieGridCard(array $movie, mysqli $conn): void
     include 'includes/slider-display.php';
     ?>
 
+    <div class="movies-page-inner">
     <div class="page-header">
         <h1 class="text-4xl font-bold mb-4">Movies</h1>
 
@@ -460,6 +730,12 @@ function renderMovieGridCard(array $movie, mysqli $conn): void
                            autocomplete="off">
                     <?php if ($category): ?>
                     <input type="hidden" name="category" value="<?php echo htmlspecialchars($category); ?>">
+                    <?php endif; ?>
+                    <?php if ($year > 0): ?>
+                    <input type="hidden" name="year" value="<?php echo $year; ?>">
+                    <?php endif; ?>
+                    <?php if ($letter !== ''): ?>
+                    <input type="hidden" name="letter" value="<?php echo htmlspecialchars($letter); ?>">
                     <?php endif; ?>
                     <button type="submit" class="bg-netflix-red hover:bg-red-700 px-6 py-2 rounded-lg">
                         <i class="fas fa-search mr-2"></i>Search
@@ -475,12 +751,12 @@ function renderMovieGridCard(array $movie, mysqli $conn): void
                 </button>
                 <div class="category-filter-scroll-wrapper" id="categoryFilterScroll">
                     <div class="flex gap-3" style="width: max-content;">
-                        <a href="<?php echo BASE_URL; ?>/movies<?php echo $search ? '?search=' . urlencode($search) : ''; ?>"
+                        <a href="<?php echo htmlspecialchars(moviesFilterUrl(['category' => null, 'page' => null])); ?>"
                            class="px-4 py-2 rounded-lg whitespace-nowrap <?php echo !$category ? 'bg-netflix-red' : 'bg-gray-800 hover:bg-gray-700'; ?>">
                             All
                         </a>
                         <?php foreach ($categories as $cat): ?>
-                        <a href="<?php echo BASE_URL; ?>/movies?category=<?php echo urlencode($cat['slug']); ?><?php echo $search ? '&search=' . urlencode($search) : ''; ?>"
+                        <a href="<?php echo htmlspecialchars(moviesFilterUrl(['category' => $cat['slug'], 'page' => null])); ?>"
                            class="px-4 py-2 rounded-lg whitespace-nowrap <?php echo $category === $cat['slug'] ? 'bg-netflix-red' : 'bg-gray-800 hover:bg-gray-700'; ?>">
                             <?php echo htmlspecialchars($cat['name']); ?>
                         </a>
@@ -496,77 +772,8 @@ function renderMovieGridCard(array $movie, mysqli $conn): void
         </div>
     </div>
 
-    <?php if ($category && !$search): ?>
+    <?php if ($search !== '' && !empty($search_actors)): ?>
     <div class="movies-section">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="movies-section-title">
-                <i class="fas fa-film text-netflix-red"></i>
-                <?php echo htmlspecialchars($active_category_name); ?> Movies
-                <span class="text-gray-400 text-lg">(<?php echo $total_movies; ?> movies)</span>
-            </h2>
-        </div>
-        <?php if (!empty($movies)): ?>
-        <div class="movie-grid">
-            <?php foreach ($movies as $movie): ?>
-                <?php renderMovieGridCard($movie, $conn); ?>
-            <?php endforeach; ?>
-        </div>
-
-        <?php if ($total_movies > $per_page): ?>
-        <div class="flex justify-center items-center gap-2 mt-8">
-            <?php if ($page > 1): ?>
-            <a href="<?php echo BASE_URL; ?>/movies?category=<?php echo urlencode($category); ?>&page=<?php echo $page - 1; ?>"
-               class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">
-                <i class="fas fa-chevron-left mr-2"></i>Previous
-            </a>
-            <?php endif; ?>
-
-            <div class="flex gap-2">
-                <?php
-                $total_pages = (int) ceil($total_movies / $per_page);
-                $start_page = max(1, $page - 2);
-                $end_page = min($total_pages, $page + 2);
-                if ($start_page > 1): ?>
-                    <a href="<?php echo BASE_URL; ?>/movies?category=<?php echo urlencode($category); ?>&page=1"
-                       class="px-4 py-2 rounded-lg <?php echo $page === 1 ? 'bg-netflix-red' : 'bg-gray-800 hover:bg-gray-700'; ?>">1</a>
-                    <?php if ($start_page > 2): ?><span class="px-2 py-2 text-gray-400">...</span><?php endif; ?>
-                <?php endif; ?>
-
-                <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
-                <a href="<?php echo BASE_URL; ?>/movies?category=<?php echo urlencode($category); ?>&page=<?php echo $i; ?>"
-                   class="px-4 py-2 rounded-lg <?php echo $page === $i ? 'bg-netflix-red' : 'bg-gray-800 hover:bg-gray-700'; ?>">
-                    <?php echo $i; ?>
-                </a>
-                <?php endfor; ?>
-
-                <?php if ($end_page < $total_pages): ?>
-                    <?php if ($end_page < $total_pages - 1): ?><span class="px-2 py-2 text-gray-400">...</span><?php endif; ?>
-                    <a href="<?php echo BASE_URL; ?>/movies?category=<?php echo urlencode($category); ?>&page=<?php echo $total_pages; ?>"
-                       class="px-4 py-2 rounded-lg <?php echo $page === $total_pages ? 'bg-netflix-red' : 'bg-gray-800 hover:bg-gray-700'; ?>">
-                        <?php echo $total_pages; ?>
-                    </a>
-                <?php endif; ?>
-            </div>
-
-            <?php if ($page < $total_pages): ?>
-            <a href="<?php echo BASE_URL; ?>/movies?category=<?php echo urlencode($category); ?>&page=<?php echo $page + 1; ?>"
-               class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg">
-                Next<i class="fas fa-chevron-right ml-2"></i>
-            </a>
-            <?php endif; ?>
-        </div>
-        <?php endif; ?>
-        <?php else: ?>
-        <div class="text-center py-12 text-gray-400">
-            <i class="fas fa-film text-6xl mb-4"></i>
-            <p>No movies found in this category.</p>
-        </div>
-        <?php endif; ?>
-    </div>
-
-    <?php elseif ($search && (!empty($movies) || !empty($search_actors))): ?>
-    <div class="movies-section">
-        <?php if (!empty($search_actors)): ?>
         <div class="mb-8">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="movies-section-title">
@@ -593,59 +800,115 @@ function renderMovieGridCard(array $movie, mysqli $conn): void
                 <?php endforeach; ?>
             </div>
         </div>
-        <?php endif; ?>
-
-        <?php if (!empty($movies)): ?>
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="movies-section-title">
-                <i class="fas fa-search text-netflix-red"></i>
-                Movies
-                <span class="text-gray-400 text-lg">(<?php echo count($movies); ?>)</span>
-            </h2>
-        </div>
-        <div class="movie-grid">
-            <?php foreach ($movies as $movie): ?>
-                <?php renderMovieGridCard($movie, $conn); ?>
-            <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
     </div>
+    <?php endif; ?>
 
-    <?php elseif (!empty($movies_by_category)): ?>
-        <?php foreach ($movies_by_category as $categoryName => $categoryData): ?>
-        <?php
-        $categorySlug = $categoryData['slug'];
-        $categoryMovies = $categoryData['movies'];
-        $categoryTotal = $category_counts[$categorySlug] ?? count($categoryMovies);
-        ?>
-        <div class="movies-section">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="movies-section-title">
+    <div class="movies-archive-layout">
+        <div class="movies-main">
+            <div class="movies-filters-mobile">
+                <label for="movies-year-select-mobile" class="movies-sidebar-title">Year</label>
+                <select id="movies-year-select-mobile" class="movies-years-select" onchange="if(this.value) window.location.href=this.value;">
+                    <option value="<?php echo htmlspecialchars(moviesFilterUrl(['year' => null, 'page' => null])); ?>" <?php echo $year <= 0 ? 'selected' : ''; ?>>All Years</option>
+                    <?php foreach ($years as $yearRow): ?>
+                    <option value="<?php echo htmlspecialchars(moviesFilterUrl(['year' => (int) $yearRow['release_year'], 'page' => null])); ?>"
+                            <?php echo $year === (int) $yearRow['release_year'] ? 'selected' : ''; ?>>
+                        <?php echo (int) $yearRow['release_year']; ?> (<?php echo (int) $yearRow['movie_count']; ?>)
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="movies-toolbar">
+                <h2 class="movies-section-title mb-0">
                     <i class="fas fa-film text-netflix-red"></i>
-                    <?php echo htmlspecialchars($categoryName); ?>
-                    <span class="text-gray-400 text-lg">(<?php echo $categoryTotal; ?> movies)</span>
+                    <?php if ($search !== ''): ?>
+                        Search Results
+                    <?php elseif ($category !== ''): ?>
+                        <?php echo htmlspecialchars($active_category_name); ?> Movies
+                    <?php elseif ($year > 0): ?>
+                        Movies from <?php echo $year; ?>
+                    <?php elseif ($letter !== ''): ?>
+                        Movies — <?php echo $letter === '#' ? '#' : $letter; ?>
+                    <?php else: ?>
+                        All Movies
+                    <?php endif; ?>
+                    <span class="text-gray-400 text-lg">(<?php echo $total_movies; ?>)</span>
                 </h2>
-                <?php if ($categoryTotal > $movies_per_row): ?>
-                <a href="<?php echo BASE_URL; ?>/movies?category=<?php echo urlencode($categorySlug); ?><?php echo $search ? '&search=' . urlencode($search) : ''; ?>"
-                   class="text-netflix-red hover:text-red-600 font-semibold">
-                    View All <i class="fas fa-arrow-right ml-1"></i>
+                <div class="movies-year-filter hidden lg:flex">
+                    <label for="movies-year-select">Year</label>
+                    <select id="movies-year-select" class="movies-years-select" onchange="if(this.value) window.location.href=this.value;">
+                        <option value="<?php echo htmlspecialchars(moviesFilterUrl(['year' => null, 'page' => null])); ?>" <?php echo $year <= 0 ? 'selected' : ''; ?>>All Years</option>
+                        <?php foreach ($years as $yearRow): ?>
+                        <option value="<?php echo htmlspecialchars(moviesFilterUrl(['year' => (int) $yearRow['release_year'], 'page' => null])); ?>"
+                                <?php echo $year === (int) $yearRow['release_year'] ? 'selected' : ''; ?>>
+                            <?php echo (int) $yearRow['release_year']; ?> (<?php echo (int) $yearRow['movie_count']; ?>)
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
+            <?php if ($year > 0 || $letter !== '' || $category !== ''): ?>
+            <div class="movies-active-filters">
+                <?php if ($category !== ''): ?>
+                <a href="<?php echo htmlspecialchars(moviesFilterUrl(['category' => null, 'page' => null])); ?>" class="movies-filter-chip">
+                    <?php echo htmlspecialchars($active_category_name); ?> <i class="fas fa-times"></i>
+                </a>
+                <?php endif; ?>
+                <?php if ($year > 0): ?>
+                <a href="<?php echo htmlspecialchars(moviesFilterUrl(['year' => null, 'page' => null])); ?>" class="movies-filter-chip">
+                    Year: <?php echo $year; ?> <i class="fas fa-times"></i>
+                </a>
+                <?php endif; ?>
+                <?php if ($letter !== ''): ?>
+                <a href="<?php echo htmlspecialchars(moviesFilterUrl(['letter' => null, 'page' => null])); ?>" class="movies-filter-chip">
+                    Letter: <?php echo htmlspecialchars($letter); ?> <i class="fas fa-times"></i>
                 </a>
                 <?php endif; ?>
             </div>
+            <?php endif; ?>
+
+            <?php if (!empty($movies)): ?>
             <div class="movie-grid">
-                <?php foreach (array_slice($categoryMovies, 0, $movies_per_row) as $movie): ?>
+                <?php foreach ($movies as $movie): ?>
                     <?php renderMovieGridCard($movie, $conn); ?>
                 <?php endforeach; ?>
             </div>
-        </div>
-        <?php endforeach; ?>
 
-    <?php else: ?>
-    <div class="text-center py-20 px-4">
-        <i class="fas fa-film text-6xl mb-4 text-gray-600"></i>
-        <p class="text-gray-400 text-xl">No movies found</p>
+            <?php if ($use_pagination): ?>
+                <?php renderMoviesPagination($total_movies, $per_page, $page); ?>
+            <?php endif; ?>
+            <?php else: ?>
+            <div class="text-center py-12 text-gray-400">
+                <i class="fas fa-film text-6xl mb-4"></i>
+                <p>No movies found<?php echo $search !== '' ? ' for your search.' : '.'; ?></p>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <aside class="movies-sidebar-right" aria-label="Browse movies A to Z">
+            <ul class="movies-alpha-list">
+                <?php foreach ($alphabet as $alpha): ?>
+                <li>
+                    <a href="<?php echo htmlspecialchars(moviesFilterUrl(['letter' => $alpha, 'page' => null])); ?>"
+                       class="movies-alpha-link <?php echo $letter === $alpha ? 'active' : ''; ?>"
+                       title="Movies starting with <?php echo htmlspecialchars($alpha); ?>">
+                        <?php echo htmlspecialchars($alpha); ?>
+                    </a>
+                </li>
+                <?php endforeach; ?>
+                <?php if ($letter !== ''): ?>
+                <li>
+                    <a href="<?php echo htmlspecialchars(moviesFilterUrl(['letter' => null, 'page' => null])); ?>"
+                       class="movies-alpha-link movies-alpha-clear" title="Clear letter filter">
+                        <i class="fas fa-times"></i>
+                    </a>
+                </li>
+                <?php endif; ?>
+            </ul>
+        </aside>
     </div>
-    <?php endif; ?>
+    </div>
 </div>
 
 <script>

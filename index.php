@@ -101,11 +101,11 @@ include 'includes/header.php';
     margin-right: -50vw;
     overflow: hidden;
     background: #000;
-    min-height: 72vh;
+    min-height: 60vh;
 }
 @media (min-width: 768px) {
     .home-page .hero-carousel {
-        min-height: 82vh;
+        min-height: 70vh;
     }
 }
 .hero-carousel-track {
@@ -119,18 +119,18 @@ include 'includes/header.php';
     position: relative;
     flex: 0 0 100%;
     width: 100%;
-    min-height: 72vh;
+    min-height: 60vh;
     display: flex;
     align-items: flex-end;
-    padding: 0 1.25rem 3.5rem;
+    padding: 0 1.25rem 3rem;
     overflow: hidden;
     margin-bottom: 0;
     background: #000;
 }
 @media (min-width: 768px) {
     .home-page .hero-section {
-        min-height: 82vh;
-        padding: 0 3rem 5rem;
+        min-height: 70vh;
+        padding: 0 3rem 4rem;
     }
 }
 .home-page .hero-bg-image {
