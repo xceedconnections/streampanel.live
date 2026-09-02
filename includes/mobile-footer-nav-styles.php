@@ -12,7 +12,6 @@ $mobile_footer_nav_styles_included = true;
     --mobile-nav-height: 60px;
     --mobile-nav-safe-bottom: env(safe-area-inset-bottom, 0px);
     --mobile-nav-total-height: calc(var(--mobile-nav-height) + var(--mobile-nav-safe-bottom));
-    --mobile-nav-shift: 0px;
 }
 html {
     margin: 0;
@@ -20,20 +19,13 @@ html {
     width: 100%;
     max-width: 100%;
     background: #000;
-    min-height: 100%;
-    min-height: -webkit-fill-available;
-    min-height: -moz-fill-available;
 }
 body {
     margin: 0;
     padding: 0;
     width: 100%;
     max-width: 100%;
-    overscroll-behavior-y: none;
     background: #000;
-    min-height: 100%;
-    min-height: -webkit-fill-available;
-    min-height: -moz-fill-available;
 }
 .mobile-footer-nav-host,
 .mobile-footer-nav {
@@ -63,8 +55,6 @@ body {
         left: 0 !important;
         right: 0 !important;
         bottom: 0 !important;
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 100svh - 100vh) !important;
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 100dvh - 100vh) !important;
         top: auto !important;
         width: 100% !important;
         max-width: 100% !important;
@@ -72,11 +62,20 @@ body {
         padding: 0 !important;
         z-index: 2147483000 !important;
         pointer-events: none !important;
-        transform: translate3d(0, var(--mobile-nav-shift, 0px), 0) !important;
-        -webkit-transform: translate3d(0, var(--mobile-nav-shift, 0px), 0) !important;
+        transform: none !important;
+        -webkit-transform: none !important;
         background: transparent !important;
-        -webkit-backface-visibility: hidden;
-        backface-visibility: hidden;
+    }
+    @supports (height: 100dvh) {
+        .mobile-footer-nav-host {
+            /* Pull bar down to the visible viewport bottom (Firefox Android URL bar gap). */
+            bottom: calc(100dvh - 100vh) !important;
+        }
+    }
+    @supports (height: 100svh) {
+        .mobile-footer-nav-host {
+            bottom: calc(100svh - 100vh) !important;
+        }
     }
     .mobile-footer-nav {
         display: flex !important;
@@ -91,7 +90,7 @@ body {
         width: 100% !important;
         max-width: 100% !important;
         margin: 0 !important;
-        padding: 0.35rem 0 env(safe-area-inset-bottom, 0px) !important;
+        padding: 0.35rem 0 var(--mobile-nav-safe-bottom) !important;
         background: rgba(20, 20, 20, 0.98);
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
@@ -103,6 +102,8 @@ body {
         min-height: var(--mobile-nav-height);
         box-sizing: border-box;
         box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+        transform: none !important;
+        -webkit-transform: none !important;
         overflow: visible;
         touch-action: manipulation;
     }

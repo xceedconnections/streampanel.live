@@ -3,13 +3,30 @@
  * Slider admin schema + request handlers (must run before HTML output).
  */
 
+function sliderAdminTableExists($conn, $table)
+{
+    $safe = $conn->real_escape_string($table);
+    $result = $conn->query("SHOW TABLES LIKE '{$safe}'");
+    return $result && $result->num_rows > 0;
+}
+
+function sliderAdminColumnExists($conn, $table, $column)
+{
+    if (!sliderAdminTableExists($conn, $table)) {
+        return false;
+    }
+    $safeTable = str_replace('`', '``', $table);
+    $safeCol = $conn->real_escape_string($column);
+    $result = $conn->query("SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeCol}'");
+    return $result && $result->num_rows > 0;
+}
+
 function ensureSliderAdminSchema($conn)
 {
     static $done = false;
     if ($done) {
-        return;
+        return true;
     }
-    $done = true;
 
     try {
         $conn->query("CREATE TABLE IF NOT EXISTS sliders (
@@ -27,23 +44,25 @@ function ensureSliderAdminSchema($conn)
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-        $sliderColumns = [
-            'display_order' => "ALTER TABLE sliders ADD COLUMN display_order INT DEFAULT 0",
-            'is_active' => "ALTER TABLE sliders ADD COLUMN is_active TINYINT(1) DEFAULT 1",
-            'display_on_home' => "ALTER TABLE sliders ADD COLUMN display_on_home TINYINT(1) DEFAULT 0",
-            'display_on_movies' => "ALTER TABLE sliders ADD COLUMN display_on_movies TINYINT(1) DEFAULT 0",
-            'display_on_tv_shows' => "ALTER TABLE sliders ADD COLUMN display_on_tv_shows TINYINT(1) DEFAULT 0",
-            'display_on_live_tv' => "ALTER TABLE sliders ADD COLUMN display_on_live_tv TINYINT(1) DEFAULT 0",
-            'auto_rotate' => "ALTER TABLE sliders ADD COLUMN auto_rotate TINYINT(1) DEFAULT 1",
-            'rotate_interval' => "ALTER TABLE sliders ADD COLUMN rotate_interval INT DEFAULT 5000",
-            'created_at' => "ALTER TABLE sliders ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-            'updated_at' => "ALTER TABLE sliders ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
-        ];
+        if (sliderAdminTableExists($conn, 'sliders')) {
+            $sliderColumns = [
+                'title' => "ALTER TABLE sliders ADD COLUMN title VARCHAR(255) NOT NULL DEFAULT ''",
+                'display_order' => "ALTER TABLE sliders ADD COLUMN display_order INT DEFAULT 0",
+                'is_active' => "ALTER TABLE sliders ADD COLUMN is_active TINYINT(1) DEFAULT 1",
+                'display_on_home' => "ALTER TABLE sliders ADD COLUMN display_on_home TINYINT(1) DEFAULT 0",
+                'display_on_movies' => "ALTER TABLE sliders ADD COLUMN display_on_movies TINYINT(1) DEFAULT 0",
+                'display_on_tv_shows' => "ALTER TABLE sliders ADD COLUMN display_on_tv_shows TINYINT(1) DEFAULT 0",
+                'display_on_live_tv' => "ALTER TABLE sliders ADD COLUMN display_on_live_tv TINYINT(1) DEFAULT 0",
+                'auto_rotate' => "ALTER TABLE sliders ADD COLUMN auto_rotate TINYINT(1) DEFAULT 1",
+                'rotate_interval' => "ALTER TABLE sliders ADD COLUMN rotate_interval INT DEFAULT 5000",
+                'created_at' => "ALTER TABLE sliders ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                'updated_at' => "ALTER TABLE sliders ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+            ];
 
-        foreach ($sliderColumns as $column => $sql) {
-            $check = $conn->query("SHOW COLUMNS FROM sliders LIKE '" . $conn->real_escape_string($column) . "'");
-            if ($check && $check->num_rows === 0) {
-                @$conn->query($sql);
+            foreach ($sliderColumns as $column => $sql) {
+                if (!sliderAdminColumnExists($conn, 'sliders', $column)) {
+                    @$conn->query($sql);
+                }
             }
         }
 
@@ -63,20 +82,31 @@ function ensureSliderAdminSchema($conn)
             INDEX idx_display_order (display_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-        $slideColumns = [
-            'display_order' => "ALTER TABLE slider_slides ADD COLUMN display_order INT DEFAULT 0",
-            'is_active' => "ALTER TABLE slider_slides ADD COLUMN is_active TINYINT(1) DEFAULT 1",
-            'created_at' => "ALTER TABLE slider_slides ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-        ];
+        if (sliderAdminTableExists($conn, 'slider_slides')) {
+            $slideColumns = [
+                'title' => "ALTER TABLE slider_slides ADD COLUMN title VARCHAR(255) DEFAULT NULL",
+                'description' => "ALTER TABLE slider_slides ADD COLUMN description TEXT",
+                'image_url' => "ALTER TABLE slider_slides ADD COLUMN image_url VARCHAR(500) NOT NULL DEFAULT ''",
+                'link_type' => "ALTER TABLE slider_slides ADD COLUMN link_type ENUM('movie', 'tv_show', 'live_tv', 'external') DEFAULT 'external'",
+                'link_id' => "ALTER TABLE slider_slides ADD COLUMN link_id INT NULL",
+                'link_url' => "ALTER TABLE slider_slides ADD COLUMN link_url VARCHAR(500) DEFAULT NULL",
+                'display_order' => "ALTER TABLE slider_slides ADD COLUMN display_order INT DEFAULT 0",
+                'is_active' => "ALTER TABLE slider_slides ADD COLUMN is_active TINYINT(1) DEFAULT 1",
+                'created_at' => "ALTER TABLE slider_slides ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            ];
 
-        foreach ($slideColumns as $column => $sql) {
-            $check = $conn->query("SHOW COLUMNS FROM slider_slides LIKE '" . $conn->real_escape_string($column) . "'");
-            if ($check && $check->num_rows === 0) {
-                @$conn->query($sql);
+            foreach ($slideColumns as $column => $sql) {
+                if (!sliderAdminColumnExists($conn, 'slider_slides', $column)) {
+                    @$conn->query($sql);
+                }
             }
         }
+
+        $done = true;
+        return true;
     } catch (Exception $e) {
         error_log('Slider schema update error: ' . $e->getMessage());
+        return false;
     }
 }
 

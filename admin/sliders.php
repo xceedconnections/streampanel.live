@@ -6,90 +6,115 @@
 $page_title = "Manage Sliders";
 
 require_once __DIR__ . '/includes/slider_admin.php';
-ensureSliderAdminSchema($conn);
-list($message, $message_type) = sliderAdminTakeFlash();
 
-$slider_form_action = 'index.php?tab=sliders';
-
-// Get all sliders
+$message = '';
+$message_type = '';
 $sliders = [];
-$slidersResult = $conn->query("SELECT s.*, 
-    (SELECT COUNT(*) FROM slider_slides WHERE slider_id = s.id) as slide_count
-    FROM sliders s 
-    ORDER BY s.display_order ASC, s.id DESC");
-if ($slidersResult) {
-    $sliders = $slidersResult->fetch_all(MYSQLI_ASSOC);
-}
-
-// Get current slider and its slides
 $current_slider = null;
 $current_slides = [];
 $slider_id = isset($_GET['slider_id']) ? intval($_GET['slider_id']) : null;
-
-// If edit_slider is set but slider_id is not, use edit_slider as slider_id
 $edit_slider_id = isset($_GET['edit_slider']) ? intval($_GET['edit_slider']) : null;
-if ($edit_slider_id && !$slider_id) {
-    $slider_id = $edit_slider_id;
-}
-
-if ($slider_id) {
-    $stmt = $conn->prepare("SELECT * FROM sliders WHERE id = ?");
-    $stmt->bind_param("i", $slider_id);
-    $stmt->execute();
-    $current_slider = $stmt->get_result()->fetch_assoc();
-    
-    if ($current_slider) {
-        $stmt = $conn->prepare("SELECT * FROM slider_slides WHERE slider_id = ? ORDER BY display_order ASC, id ASC");
-        $stmt->bind_param("i", $slider_id);
-        $stmt->execute();
-        $slideResult = $stmt->get_result();
-        $current_slides = $slideResult ? $slideResult->fetch_all(MYSQLI_ASSOC) : [];
-    }
-}
-
-// Get edit slide
 $edit_slide = null;
-if (isset($_GET['edit_slide'])) {
-    $slide_id = intval($_GET['edit_slide']);
-    $stmt = $conn->prepare("SELECT * FROM slider_slides WHERE id = ?");
-    $stmt->bind_param("i", $slide_id);
-    $stmt->execute();
-    $edit_slide = $stmt->get_result()->fetch_assoc();
-    if ($edit_slide) {
-        $slider_id = $edit_slide['slider_id'];
-    }
-}
+$movies = [];
+$tv_shows = [];
+$live_tv_channels = [];
+$slider_form_action = 'index.php?tab=sliders';
 
-// Get movies, TV shows, and Live TV channels for dropdowns + autofill
-require_once __DIR__ . '/../includes/movie_helpers.php';
-$movies_raw = [];
-$moviesQuery = $conn->query("SELECT id, title, description, poster, thumbnail, backdrop FROM movies WHERE COALESCE(is_active, 1) = 1 ORDER BY title ASC");
-if ($moviesQuery) {
-    $movies_raw = $moviesQuery->fetch_all(MYSQLI_ASSOC);
-}
-$tv_shows_raw = [];
-$tvShowsQuery = $conn->query("SELECT id, title, description, poster, thumbnail FROM tv_shows WHERE COALESCE(is_active, 1) = 1 ORDER BY title ASC");
-if ($tvShowsQuery) {
-    $tv_shows_raw = $tvShowsQuery->fetch_all(MYSQLI_ASSOC);
-}
-$live_tv_raw = [];
-$liveTvQuery = $conn->query("SELECT id, name, description, logo FROM live_tv_channels WHERE COALESCE(is_active, 1) = 1 ORDER BY name ASC");
-if ($liveTvQuery) {
-    $live_tv_raw = $liveTvQuery->fetch_all(MYSQLI_ASSOC);
+try {
+    if (!ensureSliderAdminSchema($conn)) {
+        throw new RuntimeException('Could not initialize slider database tables.');
+    }
+
+    list($message, $message_type) = sliderAdminTakeFlash();
+
+    if (sliderAdminTableExists($conn, 'slider_slides')) {
+        $slidersResult = $conn->query("SELECT s.*, 
+            (SELECT COUNT(*) FROM slider_slides WHERE slider_id = s.id) as slide_count
+            FROM sliders s 
+            ORDER BY s.display_order ASC, s.id DESC");
+    } else {
+        $slidersResult = $conn->query("SELECT s.*, 0 as slide_count
+            FROM sliders s 
+            ORDER BY s.display_order ASC, s.id DESC");
+    }
+
+    if ($slidersResult) {
+        $sliders = $slidersResult->fetch_all(MYSQLI_ASSOC);
+    } else {
+        throw new RuntimeException('Failed to load sliders: ' . $conn->error);
+    }
+
+    if ($edit_slider_id && !$slider_id) {
+        $slider_id = $edit_slider_id;
+    }
+
+    if ($slider_id) {
+        $stmt = $conn->prepare("SELECT * FROM sliders WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("i", $slider_id);
+            $stmt->execute();
+            $current_slider = $stmt->get_result()->fetch_assoc();
+        }
+
+        if ($current_slider && sliderAdminTableExists($conn, 'slider_slides')) {
+            $stmt = $conn->prepare("SELECT * FROM slider_slides WHERE slider_id = ? ORDER BY display_order ASC, id ASC");
+            if ($stmt) {
+                $stmt->bind_param("i", $slider_id);
+                $stmt->execute();
+                $slideResult = $stmt->get_result();
+                $current_slides = $slideResult ? $slideResult->fetch_all(MYSQLI_ASSOC) : [];
+            }
+        }
+    }
+
+    if (isset($_GET['edit_slide']) && sliderAdminTableExists($conn, 'slider_slides')) {
+        $slide_id = intval($_GET['edit_slide']);
+        $stmt = $conn->prepare("SELECT * FROM slider_slides WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("i", $slide_id);
+            $stmt->execute();
+            $edit_slide = $stmt->get_result()->fetch_assoc();
+            if ($edit_slide) {
+                $slider_id = $edit_slide['slider_id'];
+            }
+        }
+    }
+
+    require_once __DIR__ . '/../includes/movies_schema.php';
+    ensureMoviesSchema($conn);
+    require_once __DIR__ . '/../includes/movie_helpers.php';
+
+    $moviesQuery = $conn->query("SELECT id, title, description, poster, thumbnail, backdrop FROM movies WHERE COALESCE(is_active, 1) = 1 ORDER BY title ASC");
+    $movies_raw = $moviesQuery ? $moviesQuery->fetch_all(MYSQLI_ASSOC) : [];
+    $tvShowsQuery = $conn->query("SELECT id, title, description, poster, thumbnail FROM tv_shows WHERE COALESCE(is_active, 1) = 1 ORDER BY title ASC");
+    $tv_shows_raw = $tvShowsQuery ? $tvShowsQuery->fetch_all(MYSQLI_ASSOC) : [];
+    $liveTvQuery = $conn->query("SELECT id, name, description, logo FROM live_tv_channels WHERE COALESCE(is_active, 1) = 1 ORDER BY name ASC");
+    $live_tv_raw = $liveTvQuery ? $liveTvQuery->fetch_all(MYSQLI_ASSOC) : [];
+} catch (Exception $e) {
+    error_log('Admin sliders page error: ' . $e->getMessage());
+    if ($message === '') {
+        $message = $e->getMessage();
+        $message_type = 'error';
+    }
+    $movies_raw = [];
+    $tv_shows_raw = [];
+    $live_tv_raw = [];
 }
 
 $movies = [];
-foreach ($movies_raw as $m) {
-    $img = movieBackdropUrl($m);
-    if ($img === '') {
-        $img = moviePosterUrl($m);
+if (!empty($movies_raw) && function_exists('movieBackdropUrl')) {
+    foreach ($movies_raw as $m) {
+        $img = movieBackdropUrl($m);
+        if ($img === '') {
+            $img = moviePosterUrl($m);
+        }
+        $movies[] = [
+            'id' => (int) $m['id'],
+            'title' => (string) ($m['title'] ?? ''),
+            'description' => (string) ($m['description'] ?? ''),
+            'image' => $img,
+        ];
     }
-    $movies[] = [
-        'id' => (int) $m['id'],
-        'title' => (string) ($m['title'] ?? ''),
-        'description' => (string) ($m['description'] ?? ''),
-        'image' => $img,
-    ];
 }
 $tv_shows = [];
 foreach ($tv_shows_raw as $s) {
