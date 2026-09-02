@@ -84,10 +84,6 @@ body {
         overflow: visible;
         touch-action: manipulation;
     }
-    html.ff-android-nav .mobile-footer-nav {
-        bottom: auto !important;
-        will-change: top, left, width;
-    }
     body > .pt-16,
     body .page-container,
     body .home-page,
