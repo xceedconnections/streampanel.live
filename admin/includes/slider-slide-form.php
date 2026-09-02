@@ -24,7 +24,8 @@ $curLiveLabel = ($curType === 'live_tv' && $curLinkId) ? $findTitle($live_tv_cha
     <p class="text-sm text-gray-400 mb-4">
         Pick <strong>Movie / TV / Live TV</strong>, then type to search by name. Title, description, and banner prefill automatically.
     </p>
-    <form method="POST" action="" enctype="multipart/form-data" id="slide-form">
+    <form method="POST" action="index.php?tab=sliders&amp;slider_id=<?php echo (int) $current_slider['id']; ?>" enctype="multipart/form-data" id="slide-form">
+        <input type="hidden" name="tab" value="sliders">
         <input type="hidden" name="save_slide" value="1">
         <input type="hidden" name="slider_id" value="<?php echo (int) $current_slider['id']; ?>">
         <?php if ($edit_slide): ?>

@@ -5,274 +5,11 @@
  */
 $page_title = "Manage Sliders";
 
-$message = '';
-$message_type = '';
+require_once __DIR__ . '/includes/slider_admin.php';
+ensureSliderAdminSchema($conn);
+[$message, $message_type] = sliderAdminTakeFlash();
 
-// Initialize database schema
-try {
-    // Check and add new columns to sliders table
-    $check_columns = $conn->query("SHOW COLUMNS FROM sliders LIKE 'display_on_home'");
-    if ($check_columns->num_rows == 0) {
-        @$conn->query("ALTER TABLE sliders ADD COLUMN display_on_home BOOLEAN DEFAULT FALSE");
-        @$conn->query("ALTER TABLE sliders ADD COLUMN display_on_movies BOOLEAN DEFAULT FALSE");
-        @$conn->query("ALTER TABLE sliders ADD COLUMN display_on_tv_shows BOOLEAN DEFAULT FALSE");
-        @$conn->query("ALTER TABLE sliders ADD COLUMN display_on_live_tv BOOLEAN DEFAULT FALSE");
-        @$conn->query("ALTER TABLE sliders ADD COLUMN auto_rotate BOOLEAN DEFAULT TRUE");
-        @$conn->query("ALTER TABLE sliders ADD COLUMN rotate_interval INT DEFAULT 5000");
-    }
-    
-    // Create slider_slides table if it doesn't exist
-    @$conn->query("CREATE TABLE IF NOT EXISTS slider_slides (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        slider_id INT NOT NULL,
-        title VARCHAR(255),
-        description TEXT,
-        image_url VARCHAR(500) NOT NULL,
-        link_type ENUM('movie', 'tv_show', 'live_tv', 'external') DEFAULT 'external',
-        link_id INT NULL,
-        link_url VARCHAR(500),
-        display_order INT DEFAULT 0,
-        is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (slider_id) REFERENCES sliders(id) ON DELETE CASCADE,
-        INDEX idx_slider_id (slider_id),
-        INDEX idx_display_order (display_order)
-    )");
-} catch (Exception $e) {
-    error_log("Slider schema update error: " . $e->getMessage());
-}
-
-// Handle slider deletion
-if (isset($_GET['delete_slider'])) {
-    $id = intval($_GET['delete_slider']);
-    $stmt = $conn->prepare("DELETE FROM sliders WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $message = 'Slider deleted successfully';
-    $message_type = 'success';
-    if (headers_sent()) {
-        echo '<script>window.location.href = "?tab=sliders";</script>';
-        exit;
-    } else {
-    header("Location: ?tab=sliders");
-    exit;
-    }
-}
-
-// Handle slide deletion
-if (isset($_GET['delete_slide'])) {
-    $id = intval($_GET['delete_slide']);
-    $stmt = $conn->prepare("DELETE FROM slider_slides WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $message = 'Slide deleted successfully';
-    $message_type = 'success';
-    if (headers_sent()) {
-        echo '<script>window.location.href = "?tab=sliders' . (isset($_GET['slider_id']) ? '&slider_id=' . intval($_GET['slider_id']) : '') . '";</script>';
-        exit;
-    } else {
-        header("Location: ?tab=sliders" . (isset($_GET['slider_id']) ? '&slider_id=' . intval($_GET['slider_id']) : ''));
-        exit;
-    }
-}
-
-// Handle slider save/update
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_slider'])) {
-    $id = $_POST['id'] ?? null;
-    $title = sanitize($_POST['title'] ?? '');
-    $display_order = intval($_POST['display_order'] ?? 0);
-    $is_active = isset($_POST['is_active']) ? 1 : 0;
-    $display_on_home = isset($_POST['display_on_home']) ? 1 : 0;
-    $display_on_movies = isset($_POST['display_on_movies']) ? 1 : 0;
-    $display_on_tv_shows = isset($_POST['display_on_tv_shows']) ? 1 : 0;
-    $display_on_live_tv = isset($_POST['display_on_live_tv']) ? 1 : 0;
-    $auto_rotate = isset($_POST['auto_rotate']) ? 1 : 0;
-    $rotate_interval = intval($_POST['rotate_interval'] ?? 5000);
-    
-    if ($id) {
-        $stmt = $conn->prepare("UPDATE sliders SET title=?, display_order=?, is_active=?, display_on_home=?, display_on_movies=?, display_on_tv_shows=?, display_on_live_tv=?, auto_rotate=?, rotate_interval=? WHERE id=?");
-        $stmt->bind_param("siiiiiiiii", $title, $display_order, $is_active, $display_on_home, $display_on_movies, $display_on_tv_shows, $display_on_live_tv, $auto_rotate, $rotate_interval, $id);
-        $stmt->execute();
-        $message = 'Slider updated successfully';
-    } else {
-        $stmt = $conn->prepare("INSERT INTO sliders (title, display_order, is_active, display_on_home, display_on_movies, display_on_tv_shows, display_on_live_tv, auto_rotate, rotate_interval) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("siiiiiiii", $title, $display_order, $is_active, $display_on_home, $display_on_movies, $display_on_tv_shows, $display_on_live_tv, $auto_rotate, $rotate_interval);
-        $stmt->execute();
-        $id = $conn->insert_id;
-        $message = 'Slider added successfully';
-    }
-    $message_type = 'success';
-    if (headers_sent()) {
-        echo '<script>window.location.href = "?tab=sliders&slider_id=' . $id . '";</script>';
-        exit;
-    } else {
-        header("Location: ?tab=sliders&slider_id=" . $id);
-        exit;
-    }
-}
-
-// Handle slide save/update
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_slide'])) {
-    $id = $_POST['slide_id'] ?? null;
-    $slider_id = intval($_POST['slider_id']);
-    $title = sanitize($_POST['slide_title'] ?? '');
-    $description = sanitize($_POST['slide_description'] ?? '');
-    $image_url = sanitize($_POST['slide_image_url'] ?? '');
-    $link_type = sanitize($_POST['slide_link_type'] ?? 'external');
-    $link_id = !empty($_POST['slide_link_id']) ? intval($_POST['slide_link_id']) : null;
-    $link_url = sanitize($_POST['slide_link_url'] ?? '');
-    $display_order = intval($_POST['slide_display_order'] ?? 0);
-    $is_active = isset($_POST['slide_is_active']) ? 1 : 0;
-    
-    // Handle image upload
-    if (isset($_FILES['slide_image_file']) && $_FILES['slide_image_file']['error'] === UPLOAD_ERR_OK) {
-        $upload_dir = __DIR__ . '/../uploads/sliders/';
-        if (!is_dir($upload_dir)) {
-            mkdir($upload_dir, 0755, true);
-        }
-        
-        $file_extension = strtolower(pathinfo($_FILES['slide_image_file']['name'], PATHINFO_EXTENSION));
-        $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        $max_file_size = 5 * 1024 * 1024; // 5MB
-        
-        if ($_FILES['slide_image_file']['size'] > $max_file_size) {
-            $message = 'File size exceeds 5MB limit';
-            $message_type = 'error';
-        } elseif (in_array($file_extension, $allowed_extensions)) {
-            $file_name = 'slider_' . time() . '_' . uniqid() . '.' . $file_extension;
-            $file_path = $upload_dir . $file_name;
-            
-            if (move_uploaded_file($_FILES['slide_image_file']['tmp_name'], $file_path)) {
-                // Verify file was actually saved
-                if (file_exists($file_path)) {
-                    // Delete old image if exists (for updates)
-                    if ($id) {
-                        $old_slide = $conn->prepare("SELECT image_url FROM slider_slides WHERE id = ?");
-                        $old_slide->bind_param("i", $id);
-                        $old_slide->execute();
-                        $old_slide_result = $old_slide->get_result()->fetch_assoc();
-                        if ($old_slide_result && !empty($old_slide_result['image_url']) && strpos($old_slide_result['image_url'], 'uploads/sliders/') !== false) {
-                            // Clean up old file path - handle both BASE_URL formats
-                            $old_url = $old_slide_result['image_url'];
-                            $old_file_path = str_replace(BASE_URL . '/', __DIR__ . '/../', $old_url);
-                            $old_file_path = str_replace('/admin', '', $old_file_path);
-                            if (file_exists($old_file_path)) {
-                                @unlink($old_file_path);
-                            }
-                        }
-                    }
-                    // Ensure BASE_URL doesn't include /admin
-                    $base_url = str_replace('/admin', '', BASE_URL);
-                    $image_url = rtrim($base_url, '/') . '/uploads/sliders/' . $file_name;
-                } else {
-                    $message = 'File upload failed - file not found after upload';
-                    $message_type = 'error';
-                }
-            } else {
-                $message = 'Failed to upload image. Error: ' . ($_FILES['slide_image_file']['error'] ?? 'Unknown');
-                $message_type = 'error';
-            }
-        } else {
-            $message = 'Invalid file type. Allowed: JPG, PNG, GIF, WEBP';
-            $message_type = 'error';
-        }
-    }
-
-    // Auto-fill from linked content when fields are empty
-    if ($message_type !== 'error' && $link_type === 'movie' && $link_id) {
-        require_once __DIR__ . '/../includes/movie_helpers.php';
-        $movie = getMovieById($conn, $link_id);
-        if ($movie) {
-            if ($title === '') {
-                $title = $movie['title'] ?? '';
-            }
-            if ($description === '') {
-                $description = $movie['description'] ?? '';
-            }
-            if ($image_url === '') {
-                $image_url = movieBackdropUrl($movie);
-                if ($image_url === '') {
-                    $image_url = moviePosterUrl($movie);
-                }
-            }
-        }
-    } elseif ($message_type !== 'error' && $link_type === 'tv_show' && $link_id) {
-        $show = getTVShowById($conn, $link_id);
-        if ($show) {
-            if ($title === '') {
-                $title = $show['title'] ?? '';
-            }
-            if ($description === '' && !empty($show['description'])) {
-                $description = $show['description'];
-            }
-            if ($image_url === '') {
-                $image_url = $show['poster'] ?? ($show['thumbnail'] ?? '');
-            }
-        }
-    } elseif ($message_type !== 'error' && $link_type === 'live_tv' && $link_id) {
-        $channel = getChannelById($conn, $link_id);
-        if ($channel) {
-            if ($title === '') {
-                $title = $channel['name'] ?? '';
-            }
-            if ($description === '' && !empty($channel['description'])) {
-                $description = $channel['description'];
-            }
-            if ($image_url === '') {
-                $image_url = $channel['logo'] ?? '';
-            }
-        }
-    }
-
-    // Image required only when we still have nothing (movies can use TMDB backdrop)
-    if ($message_type !== 'error' && $image_url === '') {
-        if ($id) {
-            $existing_slide = $conn->prepare("SELECT image_url FROM slider_slides WHERE id = ?");
-            $existing_slide->bind_param("i", $id);
-            $existing_slide->execute();
-            $existing_result = $existing_slide->get_result()->fetch_assoc();
-            if ($existing_result && !empty($existing_result['image_url'])) {
-                $image_url = $existing_result['image_url'];
-            }
-        }
-        if ($image_url === '') {
-            $message = 'Please provide an image, or link a Movie/TV/Live item that has a poster/banner';
-            $message_type = 'error';
-        }
-    }
-    
-    // Only proceed if no error occurred
-    if ($message_type !== 'error') {
-        if ($id) {
-            $stmt = $conn->prepare("UPDATE slider_slides SET title=?, description=?, image_url=?, link_type=?, link_id=?, link_url=?, display_order=?, is_active=? WHERE id=?");
-            $stmt->bind_param("sssssiiii", $title, $description, $image_url, $link_type, $link_id, $link_url, $display_order, $is_active, $id);
-            $stmt->execute();
-            $message = 'Slide updated successfully';
-        } else {
-            // New slides: if order left at 0, append to end
-            if ($display_order <= 0) {
-                $maxRes = $conn->prepare('SELECT COALESCE(MAX(display_order), 0) AS m FROM slider_slides WHERE slider_id = ?');
-                $maxRes->bind_param('i', $slider_id);
-                $maxRes->execute();
-                $maxRow = $maxRes->get_result()->fetch_assoc();
-                $display_order = ((int) ($maxRow['m'] ?? 0)) + 1;
-            }
-            $stmt = $conn->prepare("INSERT INTO slider_slides (slider_id, title, description, image_url, link_type, link_id, link_url, display_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("issssssii", $slider_id, $title, $description, $image_url, $link_type, $link_id, $link_url, $display_order, $is_active);
-            $stmt->execute();
-            $message = 'Slide added successfully';
-        }
-        $message_type = 'success';
-    }
-    
-    if (headers_sent()) {
-        echo '<script>window.location.href = "?tab=sliders&slider_id=' . $slider_id . '";</script>';
-        exit;
-    } else {
-        header("Location: ?tab=sliders&slider_id=" . $slider_id);
-    exit;
-    }
-}
+$slider_form_action = 'index.php?tab=sliders';
 
 // Get all sliders
 $sliders = $conn->query("SELECT s.*, 
@@ -383,7 +120,8 @@ $slide_catalog_json = json_encode([
     <div class="lg:col-span-1">
         <div class="bg-gray-900 rounded-lg p-6 mb-6">
             <h2 class="text-2xl font-bold mb-4">Create New Slider</h2>
-            <form method="POST" action="">
+            <form method="POST" action="<?php echo htmlspecialchars($slider_form_action); ?>">
+                <input type="hidden" name="tab" value="sliders">
                 <input type="hidden" name="save_slider" value="1">
                 <div class="mb-4">
                     <label class="block text-sm font-semibold mb-2">Slider Name *</label>
@@ -528,7 +266,8 @@ if ($edit_slider_id) {
 <?php if ($edit_slider_id): ?>
 <div class="bg-gray-900 rounded-lg p-6 mb-6">
     <h3 class="text-xl font-bold mb-4">Edit Slider Settings</h3>
-    <form method="POST" action="">
+    <form method="POST" action="<?php echo htmlspecialchars($slider_form_action . '&slider_id=' . (int) $edit_slider_data['id'] . '&edit_slider=' . (int) $edit_slider_data['id']); ?>">
+        <input type="hidden" name="tab" value="sliders">
         <input type="hidden" name="save_slider" value="1">
         <input type="hidden" name="id" value="<?php echo $edit_slider_data['id']; ?>">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -616,7 +355,8 @@ if ($edit_slider_id) {
     <?php if (empty($current_slides)): ?>
     <p class="text-gray-400">No slides added yet. Add your first slide above.</p>
     <?php else: ?>
-    <form method="POST" action="?tab=sliders&slider_id=<?php echo (int) $current_slider['id']; ?>" id="slideOrderForm">
+    <form method="POST" action="index.php?tab=sliders&amp;slider_id=<?php echo (int) $current_slider['id']; ?>" id="slideOrderForm">
+        <input type="hidden" name="tab" value="sliders">
         <input type="hidden" name="reorder_slides" value="1">
         <input type="hidden" name="slider_id" value="<?php echo (int) $current_slider['id']; ?>">
         <div id="slidesSortable" class="space-y-3">

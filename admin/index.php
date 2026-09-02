@@ -11,6 +11,21 @@ require_once __DIR__ . '/includes/functions.php';
 requireAdminLogin();
 
 $conn = getDBConnection();
+
+// Keep slider POST on the sliders tab when the query string is stripped (common on production).
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && empty($_GET['tab']) && empty($_POST['tab'])) {
+    if (isset($_POST['save_slider']) || isset($_POST['save_slide']) || isset($_POST['reorder_slides'])) {
+        $_POST['tab'] = 'sliders';
+    }
+}
+
+// Route slider delete/save requests even if ?tab= is missing from the URL.
+if (empty($_GET['tab']) && empty($_POST['tab'])) {
+    if (isset($_GET['delete_slider']) || isset($_GET['delete_slide'])) {
+        $_GET['tab'] = 'sliders';
+    }
+}
+
 $tab = $_GET['tab'] ?? $_POST['tab'] ?? 'dashboard';
 $validTabs = [
     'dashboard', 'movies', 'edit-movie', 'tv-shows', 'live-tv', 'edit-channel', 'categories',
@@ -48,61 +63,10 @@ if ($tab === 'movies') {
     }
 }
 
-// Handle slider slide reorder / delete BEFORE any output
+// Handle slider actions BEFORE any output
 if ($tab === 'sliders') {
-    if (isset($_GET['delete_slide'])) {
-        $id = (int) $_GET['delete_slide'];
-        $sliderId = (int) ($_GET['slider_id'] ?? 0);
-        $stmt = $conn->prepare('DELETE FROM slider_slides WHERE id = ?');
-        if ($stmt) {
-            $stmt->bind_param('i', $id);
-            $stmt->execute();
-        }
-        header('Location: ?tab=sliders' . ($sliderId > 0 ? '&slider_id=' . $sliderId : ''));
-        exit;
-    }
-
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reorder_slides'])) {
-        $sliderId = (int) ($_POST['slider_id'] ?? 0);
-        $wantsJson = !empty($_POST['ajax']) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
-
-        $orderIds = [];
-        if (!empty($_POST['slide_order']) && is_array($_POST['slide_order'])) {
-            $orderIds = array_map('intval', $_POST['slide_order']);
-        } elseif (!empty($_POST['slide_priorities']) && is_array($_POST['slide_priorities'])) {
-            // priority map: id => priority number (lower = first)
-            $priorities = [];
-            foreach ($_POST['slide_priorities'] as $sid => $prio) {
-                $priorities[(int) $sid] = (int) $prio;
-            }
-            asort($priorities, SORT_NUMERIC);
-            $orderIds = array_keys($priorities);
-        }
-
-        if ($sliderId > 0 && !empty($orderIds)) {
-            $stmt = $conn->prepare('UPDATE slider_slides SET display_order = ? WHERE id = ? AND slider_id = ?');
-            if ($stmt) {
-                $pos = 1;
-                foreach ($orderIds as $slideId) {
-                    if ($slideId <= 0) {
-                        continue;
-                    }
-                    $stmt->bind_param('iii', $pos, $slideId, $sliderId);
-                    $stmt->execute();
-                    $pos++;
-                }
-            }
-        }
-
-        if ($wantsJson) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => true, 'count' => count($orderIds)]);
-            exit;
-        }
-
-        header('Location: ?tab=sliders&slider_id=' . $sliderId . '&reordered=1');
-        exit;
-    }
+    require_once __DIR__ . '/includes/slider_admin.php';
+    processSliderAdminRequests($conn);
 }
 
 // Handle coupons actions BEFORE any output (to avoid header errors)
@@ -898,12 +862,6 @@ if ($tab === 'match-replace' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($
         header("Location: ?tab=match-replace&error=" . urlencode("File upload error: " . $file['error']));
         exit;
     }
-}
-
-// Handle sliders actions BEFORE any output (to avoid header errors)
-if ($tab === 'sliders') {
-    // Slider actions are handled in sliders.php, but we need to ensure redirects work
-    // The sliders.php file handles its own redirects with headers_sent() checks
 }
 
 // Handle ads actions BEFORE any output (to avoid header errors)
