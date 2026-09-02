@@ -1,79 +1,110 @@
-# Quick Setup Guide for aaPanel
+# aaPanel Cron Setup — Stream Source Checker
 
-## The Problem
-If you're getting "Permission denied" error, aaPanel is trying to run the PHP file directly as a shell script.
+These jobs remove **dead M3U8/HLS and DASH sources** from TV channels. They **never delete channels**.
 
-## Solution: Use the Wrapper Script
+## Quick fix for "Permission denied"
 
-### Step 1: Upload Files
-Make sure both files are uploaded:
-- `cron/check-m3u8-streams.php`
-- `cron/run-m3u8-check.sh`
-
-### Step 2: Make Wrapper Executable
-SSH into your server and run:
-```bash
-chmod +x /www/wwwroot/streampanel.live/cron/run-m3u8-check.sh
+If you see:
+```
+/www/wwwroot/streampanel.live/cron/run-dash-check.sh: Permission denied
 ```
 
-### Step 3: Setup Cron in aaPanel
+Use **one** of these in aaPanel (Shell Script):
 
-1. Go to **Cron** in aaPanel
-2. Click **Add Cron Task**
-3. Fill in:
-   - **Task Name:** `M3U8 Stream Checker`
-   - **Task Type:** Select **Shell Script** or **Command**
-   - **Execution Cycle:** `Every 6 hours` or `0 */6 * * *`
-   - **Script Content:** 
-     ```
-     /www/wwwroot/streampanel.live/cron/run-m3u8-check.sh
-     ```
-4. Click **Submit**
+### Option 1 — Run with `bash` (no chmod needed)
 
-### Step 4: Test It
-Click **Run** button next to the cron task to test it immediately.
-
-## Alternative: Direct PHP Command
-
-If wrapper doesn't work, try this in aaPanel Cron:
-
-**Task Type:** Shell Script  
-**Script Content:**
+**M3U8:**
 ```bash
-/usr/bin/php /www/wwwroot/streampanel.live/cron/check-m3u8-streams.php
+bash /www/wwwroot/streampanel.live/cron/run-m3u8-check.sh
 ```
 
-If `/usr/bin/php` doesn't work, find your PHP path:
+**DASH:**
+```bash
+bash /www/wwwroot/streampanel.live/cron/run-dash-check.sh
+```
+
+**Both:**
+```bash
+bash /www/wwwroot/streampanel.live/cron/run-all-stream-checks.sh
+```
+
+### Option 2 — Direct PHP (most reliable on aaPanel)
+
+Find PHP path on server:
 ```bash
 which php
 ```
 
-Then use that path instead.
+Common paths: `/usr/bin/php` or `/usr/local/php/bin/php`
 
-## Check Logs
-After running, check the log:
+**M3U8:**
 ```bash
-tail -f /www/wwwroot/streampanel.live/logs/m3u8-check.log
+/usr/local/php/bin/php /www/wwwroot/streampanel.live/cron/check-m3u8-streams.php
 ```
 
-## Still Having Issues?
+**DASH:**
+```bash
+/usr/local/php/bin/php /www/wwwroot/streampanel.live/cron/check-dash-streams.php
+```
 
-1. **Check file permissions:**
-   ```bash
-   ls -la /www/wwwroot/streampanel.live/cron/
-   ```
+### Option 3 — Make scripts executable (one-time SSH)
 
-2. **Test PHP manually:**
-   ```bash
-   /usr/bin/php /www/wwwroot/streampanel.live/cron/check-m3u8-streams.php
-   ```
+```bash
+chmod +x /www/wwwroot/streampanel.live/cron/run-m3u8-check.sh
+chmod +x /www/wwwroot/streampanel.live/cron/run-dash-check.sh
+chmod +x /www/wwwroot/streampanel.live/cron/run-all-stream-checks.sh
+```
 
-3. **Test wrapper manually:**
-   ```bash
-   /www/wwwroot/streampanel.live/cron/run-m3u8-check.sh
-   ```
+Then you can use:
+```bash
+/www/wwwroot/streampanel.live/cron/run-dash-check.sh
+```
 
-4. **Check PHP version:**
-   ```bash
-   /usr/bin/php -v
-   ```
+---
+
+## aaPanel setup
+
+1. Go to **Cron → Add Cron Task**
+2. **Task Type:** Shell Script
+3. **Execution Cycle:** `0 3,15 * * *` (twice daily) or `0 */6 * * *` (every 6 hours)
+4. **Script Content:** use one of the commands above
+5. Click **Run** to test immediately
+
+### Recommended: one task for both checks
+
+| Field | Value |
+|-------|-------|
+| Task Name | `Stream Source Checker` |
+| Script Content | `bash /www/wwwroot/streampanel.live/cron/run-all-stream-checks.sh` |
+
+---
+
+## Logs
+
+```bash
+tail -50 /www/wwwroot/streampanel.live/logs/m3u8-check.log
+tail -50 /www/wwwroot/streampanel.live/logs/dash-check.log
+```
+
+## Manual test (SSH)
+
+```bash
+bash /www/wwwroot/streampanel.live/cron/run-dash-check.sh
+bash /www/wwwroot/streampanel.live/cron/run-m3u8-check.sh
+```
+
+## Wrong vs right
+
+**Wrong** (permission denied):
+```
+/www/wwwroot/streampanel.live/cron/check-dash-streams.php
+```
+
+**Right:**
+```
+bash /www/wwwroot/streampanel.live/cron/run-dash-check.sh
+```
+or
+```
+/usr/local/php/bin/php /www/wwwroot/streampanel.live/cron/check-dash-streams.php
+```
