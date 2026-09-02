@@ -17,11 +17,11 @@ function saveMovieFromRequest($conn, ?int $movieId = null): array
     if ($category_id <= 0) {
         $category_id = 0; // never bind null as int (corrupts later fields on some PHP/mysqli)
     }
-    $featured = isset($_POST['featured']) ? 1 : 0;
-    $is_active = isset($_POST['is_active']) ? 1 : 0;
-    $is_free = isset($_POST['is_free']) ? 1 : 0;
-    $is_premium = isset($_POST['is_premium']) ? 1 : 0;
-    $show_in_slider = isset($_POST['show_in_slider']) ? 1 : 0;
+    $featured = isset($_POST['featured']) ? (int) ((string) $_POST['featured'] === '1') : 0;
+    $is_active = isset($_POST['is_active']) ? (int) ((string) $_POST['is_active'] === '1') : 0;
+    $is_free = isset($_POST['is_free']) ? (int) ((string) $_POST['is_free'] === '1') : 0;
+    $is_premium = isset($_POST['is_premium']) ? (int) ((string) $_POST['is_premium'] === '1') : 0;
+    $show_in_slider = isset($_POST['show_in_slider']) ? (int) ((string) $_POST['show_in_slider'] === '1') : 0;
     $tmdb_id = !empty($_POST['tmdb_id']) ? intval($_POST['tmdb_id']) : 0;
     $backdrop = sanitize($_POST['backdrop'] ?? '');
     $trailer_url = sanitize($_POST['trailer_url'] ?? '');
@@ -134,13 +134,26 @@ function saveMovieFromRequest($conn, ?int $movieId = null): array
         return ['success' => false, 'message' => 'Save failed: missing movie id', 'id' => null];
     }
 
-    // Force homepage flags in a separate update so slider/featured always stick
-    $flagStmt = $conn->prepare('UPDATE movies SET featured = ?, is_active = ?, is_free = ?, is_premium = ?, show_in_slider = ? WHERE id = ?');
-    if ($flagStmt) {
-        $flagStmt->bind_param('iiiiii', $featured, $is_active, $is_free, $is_premium, $show_in_slider, $savedId);
-        if (!$flagStmt->execute()) {
-            return ['success' => false, 'message' => 'Error saving homepage flags: ' . $flagStmt->error, 'id' => $savedId];
-        }
+    // Force homepage flags with raw SQL, then verify (prepared binds have been unreliable here)
+    $okFlags = $conn->query(
+        'UPDATE movies SET featured = ' . (int) $featured .
+        ', is_active = ' . (int) $is_active .
+        ', is_free = ' . (int) $is_free .
+        ', is_premium = ' . (int) $is_premium .
+        ', show_in_slider = ' . (int) $show_in_slider .
+        ' WHERE id = ' . (int) $savedId
+    );
+    if (!$okFlags) {
+        return ['success' => false, 'message' => 'Error saving homepage flags: ' . $conn->error, 'id' => $savedId];
+    }
+    $verify = $conn->query('SELECT featured, is_active, show_in_slider FROM movies WHERE id = ' . (int) $savedId);
+    $verifyRow = $verify ? $verify->fetch_assoc() : null;
+    if (!$verifyRow || (int) $verifyRow['show_in_slider'] !== (int) $show_in_slider) {
+        return [
+            'success' => false,
+            'message' => 'Homepage slider flag did not save correctly. Please try again.',
+            'id' => $savedId,
+        ];
     }
 
     if ($category_id > 0) {
@@ -171,8 +184,12 @@ function saveMovieFromRequest($conn, ?int $movieId = null): array
 
     return [
         'success' => true,
-        'message' => $movieId ? 'Movie updated successfully' : 'Movie added successfully',
+        'message' => ($movieId ? 'Movie updated successfully' : 'Movie added successfully')
+            . ' | Banner slider: ' . ($show_in_slider ? 'ON' : 'OFF')
+            . ' | Featured row: ' . ($featured ? 'ON' : 'OFF'),
         'id' => $savedId,
+        'show_in_slider' => $show_in_slider,
+        'featured' => $featured,
     ];
 }
 

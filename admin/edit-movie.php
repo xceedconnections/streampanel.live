@@ -36,7 +36,7 @@ if (!$edit_movie) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $result = saveMovieFromRequest($conn, $movie_id);
     if ($result['success']) {
-        $message = 'Movie updated successfully';
+        $message = $result['message'];
         $message_type = 'success';
     } else {
         $message = $result['message'];

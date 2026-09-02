@@ -10,6 +10,11 @@ $page_title = "Home";
 $conn = getDBConnection();
 ensureMoviesSchema($conn);
 
+// Avoid CDN/browser serving a stale homepage banner
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 // Check which sections are enabled
 $enable_movies = isSectionEnabled($conn, 'movies');
 $enable_tv_shows = isSectionEnabled($conn, 'tv_shows');
@@ -900,6 +905,10 @@ include 'includes/header.php';
 
 <div class="home-page animate-in fade-in" style="animation: fadeIn 0.7s ease-out;">
     <!-- Hero Section - cycles through movies marked "Show in Homepage Slider" -->
+    <?php
+    $slider_ids_debug = array_map(function ($m) { return (int) $m['id']; }, $slider_movies);
+    echo '<!-- homepage_slider_ids:' . implode(',', $slider_ids_debug) . ' count:' . count($slider_movies) . ' -->';
+    ?>
     <?php if (!empty($slider_movies)): ?>
         <div class="hero-carousel" id="hero-carousel" data-slide-count="<?php echo count($slider_movies); ?>">
             <div class="hero-carousel-track" id="hero-carousel-track">

@@ -23,6 +23,25 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
+// Direct homepage banner toggles (bypasses full movie form)
+if (isset($_GET['slider_on'])) {
+    $id = (int) $_GET['slider_on'];
+    $conn->query('UPDATE movies SET show_in_slider = 1, is_active = 1 WHERE id = ' . $id);
+    header('Location: ?tab=movies&banner=1');
+    exit;
+}
+if (isset($_GET['slider_off'])) {
+    $id = (int) $_GET['slider_off'];
+    $conn->query('UPDATE movies SET show_in_slider = 0 WHERE id = ' . $id);
+    header('Location: ?tab=movies&banner=1');
+    exit;
+}
+if (isset($_GET['slider_clear_all'])) {
+    $conn->query('UPDATE movies SET show_in_slider = 0');
+    header('Location: ?tab=movies&banner=1');
+    exit;
+}
+
 if (isset($_GET['edit'])) {
     header('Location: ?tab=edit-movie&id=' . (int) $_GET['edit']);
     exit;
@@ -153,6 +172,76 @@ $movie_form_action = '?tab=movies';
     <?php echo htmlspecialchars($message); ?>
 </div>
 <?php endif; ?>
+
+<?php
+$banner_movies = $conn->query(
+    "SELECT id, title, show_in_slider, featured, is_active
+     FROM movies
+     ORDER BY show_in_slider DESC, featured DESC, title ASC
+     LIMIT 50"
+)->fetch_all(MYSQLI_ASSOC);
+$slider_now = array_values(array_filter($banner_movies, function ($m) {
+    return (int) ($m['show_in_slider'] ?? 0) === 1 && (int) ($m['is_active'] ?? 0) === 1;
+}));
+?>
+<div class="bg-gray-900 rounded-lg p-6 mb-8 border border-blue-800">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+        <div>
+            <h2 class="text-2xl font-bold"><i class="fas fa-tv mr-2 text-blue-400"></i>Homepage Banner (Slider)</h2>
+            <p class="text-gray-400 text-sm mt-1">These are the movies currently set for the big trending banner. This reads live from the database.</p>
+        </div>
+        <a href="?tab=movies&slider_clear_all=1" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded text-sm"
+           onclick="return confirm('Remove ALL movies from the homepage banner?');">
+            Clear all from banner
+        </a>
+    </div>
+
+    <?php if (empty($slider_now)): ?>
+        <div class="bg-yellow-900 bg-opacity-40 border border-yellow-700 text-yellow-100 px-4 py-3 rounded mb-4">
+            No movies are in the homepage banner right now. Use <strong>Add to banner</strong> below, or edit a movie and check “Show in Homepage Slider”.
+        </div>
+    <?php else: ?>
+        <ul class="space-y-2 mb-4">
+            <?php foreach ($slider_now as $m): ?>
+            <li class="flex items-center justify-between bg-gray-800 rounded px-4 py-3">
+                <span class="font-semibold"><?php echo htmlspecialchars($m['title']); ?> <span class="text-xs text-gray-400">#<?php echo (int) $m['id']; ?></span></span>
+                <a href="?tab=movies&slider_off=<?php echo (int) $m['id']; ?>" class="text-red-300 hover:text-red-200 text-sm">Remove from banner</a>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-700 text-left text-gray-400">
+                    <th class="p-2">Movie</th>
+                    <th class="p-2">Banner</th>
+                    <th class="p-2">Featured</th>
+                    <th class="p-2">Active</th>
+                    <th class="p-2">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($banner_movies as $m): ?>
+                <tr class="border-b border-gray-800">
+                    <td class="p-2"><?php echo htmlspecialchars($m['title']); ?></td>
+                    <td class="p-2"><?php echo (int) $m['show_in_slider'] === 1 ? '<span class="text-blue-400">ON</span>' : '<span class="text-gray-500">off</span>'; ?></td>
+                    <td class="p-2"><?php echo (int) $m['featured'] === 1 ? '<span class="text-yellow-400">ON</span>' : '<span class="text-gray-500">off</span>'; ?></td>
+                    <td class="p-2"><?php echo (int) $m['is_active'] === 1 ? '<span class="text-green-400">yes</span>' : '<span class="text-red-400">no</span>'; ?></td>
+                    <td class="p-2">
+                        <?php if ((int) $m['show_in_slider'] === 1): ?>
+                            <a class="text-red-300 hover:underline" href="?tab=movies&slider_off=<?php echo (int) $m['id']; ?>">Remove</a>
+                        <?php else: ?>
+                            <a class="text-blue-300 hover:underline" href="?tab=movies&slider_on=<?php echo (int) $m['id']; ?>">Add to banner</a>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
 
 <div class="mb-6">
     <button type="button" onclick="toggleAddMovieForm()" id="add-movie-btn" class="bg-netflix-red hover:bg-red-700 px-6 py-2 rounded font-semibold">

@@ -154,26 +154,31 @@ $movie_form_action = $movie_form_action ?? '?tab=movies';
             <h3 class="text-lg font-semibold mb-3">Content Access Settings</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label class="flex items-center">
+                    <input type="hidden" name="is_free" value="0">
                     <input type="checkbox" name="is_free" value="1" <?php echo ($edit_movie['is_free'] ?? 1) ? 'checked' : ''; ?> 
                            class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
                     <span>Free Content (Available to all logged-in users)</span>
                 </label>
                 <label class="flex items-center">
+                    <input type="hidden" name="is_premium" value="0">
                     <input type="checkbox" name="is_premium" value="1" <?php echo ($edit_movie['is_premium'] ?? 0) ? 'checked' : ''; ?> 
                            class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
                     <span>Premium Content (Requires subscription)</span>
                 </label>
                 <label class="flex items-center">
+                    <input type="hidden" name="featured" value="0">
                     <input type="checkbox" name="featured" value="1" <?php echo ($edit_movie['featured'] ?? 0) ? 'checked' : ''; ?> 
                            class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
                     <span>Featured (homepage poster row)</span>
                 </label>
                 <label class="flex items-center">
+                    <input type="hidden" name="show_in_slider" value="0">
                     <input type="checkbox" name="show_in_slider" value="1" <?php echo ($edit_movie['show_in_slider'] ?? 0) ? 'checked' : ''; ?> 
                            class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
                     <span>Show in Homepage Slider (big trending banner)</span>
                 </label>
                 <label class="flex items-center">
+                    <input type="hidden" name="is_active" value="0">
                     <input type="checkbox" name="is_active" value="1" <?php echo ($edit_movie['is_active'] ?? 1) ? 'checked' : ''; ?> 
                            class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
                     <span>Active</span>
