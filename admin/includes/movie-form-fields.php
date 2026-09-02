@@ -172,12 +172,6 @@ $movie_form_action = $movie_form_action ?? '?tab=movies';
                     <span>Featured (homepage poster row)</span>
                 </label>
                 <label class="flex items-center">
-                    <input type="hidden" name="show_in_slider" value="0">
-                    <input type="checkbox" name="show_in_slider" value="1" <?php echo ($edit_movie['show_in_slider'] ?? 0) ? 'checked' : ''; ?> 
-                           class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
-                    <span>Show in Homepage Slider (big trending banner)</span>
-                </label>
-                <label class="flex items-center">
                     <input type="hidden" name="is_active" value="0">
                     <input type="checkbox" name="is_active" value="1" <?php echo ($edit_movie['is_active'] ?? 1) ? 'checked' : ''; ?> 
                            class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">

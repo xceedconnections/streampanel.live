@@ -40,23 +40,13 @@ if ($enabled_sections_count === 1) {
     }
 }
 
-// Slider = hero banner; Featured = poster row; Popular = everything else.
-$slider_movies = [];
+// Featured = poster row. Homepage big banner comes from Admin > Sliders.
 $featured_movies = [];
 $all_movies = [];
 $popular_movies = [];
+$hero_slides = [];
 
 if ($enable_movies) {
-    // Homepage big banner: ONLY movies with show_in_slider checked (and active)
-    $slider_movies = $conn->query(
-        "SELECT * FROM movies
-         WHERE COALESCE(show_in_slider, 0) = 1
-           AND COALESCE(is_active, 1) = 1
-         ORDER BY updated_at DESC, rating DESC, id DESC
-         LIMIT 20"
-    )->fetch_all(MYSQLI_ASSOC);
-
-    // Homepage featured row: ONLY movies with featured checked (and active)
     $featured_movies = $conn->query(
         "SELECT * FROM movies
          WHERE COALESCE(featured, 0) = 1
@@ -72,11 +62,13 @@ if ($enable_movies) {
          LIMIT 30"
     )->fetch_all(MYSQLI_ASSOC);
     $popular_movies = array_filter($all_movies, function ($m) {
-        return empty($m['featured']) && empty($m['show_in_slider']);
+        return empty($m['featured']);
     });
     $popular_movies = array_slice($popular_movies, 0, 10);
-
 }
+
+// Homepage trending banner = Admin > Sliders with "Display on Home"
+$hero_slides = getHomeHeroSlides($conn);
 
 // Get TV shows for index - featured first, max 6 (2 rows × 3), not in slider
 $tv_shows_for_index = [];
@@ -904,26 +896,21 @@ include 'includes/header.php';
 </style>
 
 <div class="home-page animate-in fade-in" style="animation: fadeIn 0.7s ease-out;">
-    <!-- Hero Section - cycles through movies marked "Show in Homepage Slider" -->
-    <?php
-    $slider_ids_debug = array_map(function ($m) { return (int) $m['id']; }, $slider_movies);
-    echo '<!-- homepage_slider_ids:' . implode(',', $slider_ids_debug) . ' count:' . count($slider_movies) . ' -->';
-    ?>
-    <?php if (!empty($slider_movies)): ?>
-        <div class="hero-carousel" id="hero-carousel" data-slide-count="<?php echo count($slider_movies); ?>">
+    <!-- Hero Section — from Admin > Sliders (Display on Home) -->
+    <?php if (!empty($hero_slides)): ?>
+        <div class="hero-carousel" id="hero-carousel" data-slide-count="<?php echo count($hero_slides); ?>">
             <div class="hero-carousel-track" id="hero-carousel-track">
-            <?php foreach ($slider_movies as $slideIndex => $heroMovie): ?>
+            <?php foreach ($hero_slides as $slideIndex => $heroSlide): ?>
                 <?php
-                $heroImage = htmlspecialchars(movieBackdropUrl($heroMovie));
-                $heroAccess = getMovieAccess($conn, $heroMovie);
-                $heroPlayUrl = resolveMovieWatchHref($heroMovie, $heroAccess, 0, $conn);
-                $heroPlayLabel = 'Play';
-                if (!$heroAccess['allowed']) {
-                    $heroPlayLabel = $heroAccess['reason'] === 'login' ? 'Sign In to Play' : 'Premium Required';
-                }
+                $heroImage = htmlspecialchars(assetUrl($heroSlide['image'] ?? ''));
+                $heroPlayUrl = $heroSlide['play_url'] ?? '#';
+                $heroInfoUrl = $heroSlide['info_url'] ?? $heroPlayUrl;
+                $heroPlayLabel = $heroSlide['play_label'] ?? 'Play';
                 ?>
                 <div class="hero-section hero-slide" data-hero-index="<?php echo $slideIndex; ?>">
-                    <img src="<?php echo $heroImage; ?>" alt="<?php echo htmlspecialchars($heroMovie['title']); ?>" class="hero-bg-image" onerror="this.style.display='none'">
+                    <?php if ($heroImage !== ''): ?>
+                    <img src="<?php echo $heroImage; ?>" alt="<?php echo htmlspecialchars($heroSlide['title'] ?? ''); ?>" class="hero-bg-image" onerror="this.style.display='none'">
+                    <?php endif; ?>
                     <div class="hero-content">
                         <div class="hero-badge">
                             <svg viewBox="0 0 24 24" fill="currentColor">
@@ -931,8 +918,10 @@ include 'includes/header.php';
                             </svg>
                             <span>#<?php echo $slideIndex + 1; ?> Trending Today</span>
                         </div>
-                        <h1 class="hero-title"><?php echo htmlspecialchars($heroMovie['title']); ?></h1>
-                        <p class="hero-description"><?php echo htmlspecialchars($heroMovie['description'] ?? ''); ?></p>
+                        <h1 class="hero-title"><?php echo htmlspecialchars($heroSlide['title'] ?? ''); ?></h1>
+                        <?php if (!empty($heroSlide['description'])): ?>
+                        <p class="hero-description"><?php echo htmlspecialchars($heroSlide['description']); ?></p>
+                        <?php endif; ?>
                         <div class="hero-actions">
                             <a href="<?php echo htmlspecialchars($heroPlayUrl); ?>" class="btn-play-hero">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="black" style="display: inline-block;">
@@ -940,7 +929,7 @@ include 'includes/header.php';
                                 </svg>
                                 <?php echo htmlspecialchars($heroPlayLabel); ?>
                             </a>
-                            <a href="<?php echo htmlspecialchars(getMovieDetailUrl($heroMovie, $conn)); ?>" class="btn-info-hero">
+                            <a href="<?php echo htmlspecialchars($heroInfoUrl); ?>" class="btn-info-hero">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block;">
                                     <circle cx="12" cy="12" r="10"></circle>
                                     <line x1="12" y1="16" x2="12" y2="12"></line>
@@ -953,37 +942,31 @@ include 'includes/header.php';
                 </div>
             <?php endforeach; ?>
             </div>
-            <?php if (count($slider_movies) > 1): ?>
-                <button type="button" class="hero-carousel-nav prev" id="hero-carousel-prev" aria-label="Previous slider movie">
+            <?php if (count($hero_slides) > 1): ?>
+                <button type="button" class="hero-carousel-nav prev" id="hero-carousel-prev" aria-label="Previous slide">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
                 </button>
-                <button type="button" class="hero-carousel-nav next" id="hero-carousel-next" aria-label="Next slider movie">
+                <button type="button" class="hero-carousel-nav next" id="hero-carousel-next" aria-label="Next slide">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </button>
-                <div class="hero-carousel-dots" aria-label="Homepage slider movies">
-                    <?php foreach ($slider_movies as $dotIndex => $_): ?>
+                <div class="hero-carousel-dots" aria-label="Homepage slides">
+                    <?php foreach ($hero_slides as $dotIndex => $_): ?>
                         <button type="button"
                                 class="hero-carousel-dot<?php echo $dotIndex === 0 ? ' active' : ''; ?>"
                                 data-hero-dot="<?php echo $dotIndex; ?>"
-                                aria-label="Go to slider movie <?php echo $dotIndex + 1; ?>"></button>
+                                aria-label="Go to slide <?php echo $dotIndex + 1; ?>"></button>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
         </div>
     <?php endif; ?>
     
-    <!-- Sliders -->
-    <?php
-    $page_type = 'home';
-    include 'includes/slider-display.php';
-    ?>
-    
-    <!-- Content Rows (no-hero = no big hero banner, so add top padding so content is not hidden under fixed menu) -->
-    <div class="content-rows <?php if (empty($slider_movies)): ?>no-hero<?php else: ?>has-hero-banner<?php endif; ?> <?php if (!empty($GLOBALS['page_has_sliders'])): ?>has-slider<?php endif; ?>">
+    <!-- Content Rows -->
+    <div class="content-rows <?php if (empty($hero_slides)): ?>no-hero<?php else: ?>has-hero-banner<?php endif; ?>">
         <!-- Featured Movies (small posters) — from Featured checkbox -->
         <?php if (!empty($featured_movies)): ?>
             <div class="movie-row group/row">

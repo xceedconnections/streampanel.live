@@ -176,8 +176,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_slide'])) {
             $message = 'Invalid file type. Allowed: JPG, PNG, GIF, WEBP';
             $message_type = 'error';
         }
-    } elseif (empty($image_url) && !isset($_FILES['slide_image_file'])) {
-        // If no file uploaded and no URL provided, use existing image URL for updates
+    }
+
+    // Auto-fill from linked content when fields are empty
+    if ($message_type !== 'error' && $link_type === 'movie' && $link_id) {
+        require_once __DIR__ . '/../includes/movie_helpers.php';
+        $movie = getMovieById($conn, $link_id);
+        if ($movie) {
+            if ($title === '') {
+                $title = $movie['title'] ?? '';
+            }
+            if ($description === '') {
+                $description = $movie['description'] ?? '';
+            }
+            if ($image_url === '') {
+                $image_url = movieBackdropUrl($movie);
+                if ($image_url === '') {
+                    $image_url = moviePosterUrl($movie);
+                }
+            }
+        }
+    } elseif ($message_type !== 'error' && $link_type === 'tv_show' && $link_id) {
+        $show = getTVShowById($conn, $link_id);
+        if ($show) {
+            if ($title === '') {
+                $title = $show['title'] ?? '';
+            }
+            if ($description === '' && !empty($show['description'])) {
+                $description = $show['description'];
+            }
+            if ($image_url === '') {
+                $image_url = $show['poster'] ?? ($show['thumbnail'] ?? '');
+            }
+        }
+    } elseif ($message_type !== 'error' && $link_type === 'live_tv' && $link_id) {
+        $channel = getChannelById($conn, $link_id);
+        if ($channel) {
+            if ($title === '') {
+                $title = $channel['name'] ?? '';
+            }
+            if ($description === '' && !empty($channel['description'])) {
+                $description = $channel['description'];
+            }
+            if ($image_url === '') {
+                $image_url = $channel['logo'] ?? '';
+            }
+        }
+    }
+
+    // Image required only when we still have nothing (movies can use TMDB backdrop)
+    if ($message_type !== 'error' && $image_url === '') {
         if ($id) {
             $existing_slide = $conn->prepare("SELECT image_url FROM slider_slides WHERE id = ?");
             $existing_slide->bind_param("i", $id);
@@ -185,12 +233,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_slide'])) {
             $existing_result = $existing_slide->get_result()->fetch_assoc();
             if ($existing_result && !empty($existing_result['image_url'])) {
                 $image_url = $existing_result['image_url'];
-            } else {
-                $message = 'Please provide an image URL or upload an image';
-                $message_type = 'error';
             }
-        } else {
-            $message = 'Please provide an image URL or upload an image';
+        }
+        if ($image_url === '') {
+            $message = 'Please provide an image, or link a Movie/TV/Live item that has a poster/banner';
             $message_type = 'error';
         }
     }
@@ -271,7 +317,7 @@ $live_tv_channels = $conn->query("SELECT id, name FROM live_tv_channels ORDER BY
 ?>
 <div class="mb-8">
     <h1 class="text-4xl font-bold mb-2">Manage Sliders</h1>
-    <p class="text-gray-400">Create sliders with multiple slides for Home, Movies, TV Shows, and Live TV pages</p>
+    <p class="text-gray-400">Create sliders with multiple slides. For the homepage trending banner: create a slider, enable <strong>Display on Home</strong>, then add slides (Movie / TV Show / Live TV / Custom URL).</p>
 </div>
 
 <?php if ($message): ?>
@@ -498,6 +544,11 @@ if ($edit_slider_id) {
 <!-- Add/Edit Slide Form -->
 <div class="bg-gray-900 rounded-lg p-6 mb-6">
     <h3 class="text-xl font-bold mb-4"><?php echo $edit_slide ? 'Edit' : 'Add'; ?> Slide</h3>
+    <p class="text-sm text-gray-400 mb-4">
+        Home page trending banner uses sliders with <strong>Display on Home</strong> checked.
+        For <strong>Movie</strong> slides: leave title/description/image empty to auto-use the movie banner, plot, and Play link.
+        For <strong>TV Show / Live TV</strong>: enter title, description, and image manually — Play link is automatic from the selected item.
+    </p>
     <form method="POST" action="" enctype="multipart/form-data">
         <input type="hidden" name="save_slide" value="1">
         <input type="hidden" name="slider_id" value="<?php echo $current_slider['id']; ?>">
@@ -507,7 +558,7 @@ if ($edit_slider_id) {
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-                <label class="block text-sm font-semibold mb-2">Title</label>
+                <label class="block text-sm font-semibold mb-2">Title <span class="text-gray-500 font-normal">(optional for Movie — auto-filled)</span></label>
                 <input type="text" name="slide_title" value="<?php echo htmlspecialchars($edit_slide['title'] ?? ''); ?>"
                        class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
             </div>
@@ -519,13 +570,13 @@ if ($edit_slider_id) {
         </div>
         
         <div class="mb-4">
-            <label class="block text-sm font-semibold mb-2">Description</label>
+            <label class="block text-sm font-semibold mb-2">Description <span class="text-gray-500 font-normal">(optional for Movie)</span></label>
             <textarea name="slide_description" rows="2"
                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white"><?php echo htmlspecialchars($edit_slide['description'] ?? ''); ?></textarea>
         </div>
         
         <div class="mb-4">
-            <label class="block text-sm font-semibold mb-2">Upload Image</label>
+            <label class="block text-sm font-semibold mb-2">Upload Image <span class="text-gray-500 font-normal">(optional for Movie — uses movie banner)</span></label>
             <input type="file" name="slide_image_file" id="slide_image_file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                    class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white"
                    onchange="previewImage(this)">

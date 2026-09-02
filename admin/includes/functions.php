@@ -175,7 +175,14 @@ function getSlideLink($slide, $conn) {
     
     switch ($slide['link_type']) {
         case 'movie':
-            return BASE_URL . '/watch.php?type=movie&id=' . $slide['link_id'];
+            if (!function_exists('getMovieWatchUrl')) {
+                require_once __DIR__ . '/../../includes/movie_helpers.php';
+            }
+            $movie = getMovieById($conn, (int) $slide['link_id']);
+            if ($movie) {
+                return getMovieWatchUrl($movie, 0, $conn);
+            }
+            return BASE_URL . '/watch.php?type=movie&id=' . (int) $slide['link_id'];
         case 'tv_show':
             $tv_show = getTVShowById($conn, $slide['link_id']);
             if ($tv_show && !empty($tv_show['slug'])) {
@@ -191,6 +198,112 @@ function getSlideLink($slide, $conn) {
         default:
             return '#';
     }
+}
+
+/**
+ * Homepage trending hero slides from Admin > Sliders (display_on_home).
+ * Movie slides auto-fill title/description/banner and Play/More Info links.
+ * TV/Live slides use manual title/description/image; Play link is automatic.
+ */
+function getHomeHeroSlides($conn): array
+{
+    if (!function_exists('movieBackdropUrl')) {
+        require_once __DIR__ . '/../../includes/movie_helpers.php';
+    }
+
+    $sliders = getSlidersForPage($conn, 'home');
+    $hero = [];
+
+    foreach ($sliders as $slider) {
+        foreach ($slider['slides'] ?? [] as $slide) {
+            $type = $slide['link_type'] ?? 'external';
+            $title = trim((string) ($slide['title'] ?? ''));
+            $description = trim((string) ($slide['description'] ?? ''));
+            $image = trim((string) ($slide['image_url'] ?? ''));
+            $playUrl = '#';
+            $infoUrl = '#';
+            $playLabel = 'Play';
+
+            if ($type === 'movie' && !empty($slide['link_id'])) {
+                $movie = getMovieById($conn, (int) $slide['link_id']);
+                if ($movie && (int) ($movie['is_active'] ?? 1) === 1) {
+                    if ($title === '') {
+                        $title = (string) ($movie['title'] ?? '');
+                    }
+                    if ($description === '') {
+                        $description = (string) ($movie['description'] ?? '');
+                    }
+                    if ($image === '') {
+                        $image = movieBackdropUrl($movie);
+                    }
+                    $access = function_exists('getMovieAccess') ? getMovieAccess($conn, $movie) : ['allowed' => true, 'reason' => ''];
+                    $playUrl = resolveMovieWatchHref($movie, $access, 0, $conn);
+                    $infoUrl = getMovieDetailUrl($movie, $conn);
+                    if (empty($access['allowed'])) {
+                        $playLabel = ($access['reason'] ?? '') === 'login' ? 'Sign In to Play' : 'Premium Required';
+                    }
+                } else {
+                    continue; // skip inactive/missing movies
+                }
+            } elseif ($type === 'tv_show' && !empty($slide['link_id'])) {
+                $show = getTVShowById($conn, (int) $slide['link_id']);
+                if ($show) {
+                    if ($title === '') {
+                        $title = (string) ($show['title'] ?? '');
+                    }
+                    if ($description === '') {
+                        $description = (string) ($show['description'] ?? '');
+                    }
+                    if ($image === '' && !empty($show['poster'])) {
+                        $image = $show['poster'];
+                    } elseif ($image === '' && !empty($show['thumbnail'])) {
+                        $image = $show['thumbnail'];
+                    }
+                    $playUrl = getSlideLink($slide, $conn);
+                    $infoUrl = $playUrl;
+                } else {
+                    continue;
+                }
+            } elseif ($type === 'live_tv' && !empty($slide['link_id'])) {
+                $channel = getChannelById($conn, (int) $slide['link_id']);
+                if ($channel) {
+                    if ($title === '') {
+                        $title = (string) ($channel['name'] ?? '');
+                    }
+                    if ($description === '') {
+                        $description = (string) ($channel['description'] ?? '');
+                    }
+                    if ($image === '' && !empty($channel['logo'])) {
+                        $image = $channel['logo'];
+                    }
+                    $playUrl = getSlideLink($slide, $conn);
+                    $infoUrl = $playUrl;
+                } else {
+                    continue;
+                }
+            } else {
+                // external / custom
+                $playUrl = getSlideLink($slide, $conn);
+                $infoUrl = $playUrl;
+            }
+
+            if ($title === '' && $image === '') {
+                continue;
+            }
+
+            $hero[] = [
+                'title' => $title,
+                'description' => $description,
+                'image' => $image,
+                'play_url' => $playUrl,
+                'info_url' => $infoUrl,
+                'play_label' => $playLabel,
+                'link_type' => $type,
+            ];
+        }
+    }
+
+    return $hero;
 }
 
 // Generate slug from title
