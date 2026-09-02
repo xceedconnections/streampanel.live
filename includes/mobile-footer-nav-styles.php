@@ -12,6 +12,7 @@ $mobile_footer_nav_styles_included = true;
     --mobile-nav-height: 60px;
     --mobile-nav-safe-bottom: env(safe-area-inset-bottom, 0px);
     --mobile-nav-total-height: calc(var(--mobile-nav-height) + var(--mobile-nav-safe-bottom));
+    --mobile-nav-shift: 0px;
 }
 html {
     margin: 0;
@@ -34,7 +35,7 @@ body {
     min-height: -webkit-fill-available;
     min-height: -moz-fill-available;
 }
-/* Hidden by default — desktop */
+.mobile-footer-nav-host,
 .mobile-footer-nav {
     display: none !important;
     visibility: hidden !important;
@@ -42,6 +43,7 @@ body {
     box-sizing: border-box;
 }
 @media (min-width: 768px) {
+    .mobile-footer-nav-host,
     .mobile-footer-nav {
         display: none !important;
         visibility: hidden !important;
@@ -54,15 +56,37 @@ body {
     }
 }
 @media (max-width: 767px) {
+    .mobile-footer-nav-host {
+        display: block !important;
+        visibility: visible !important;
+        position: fixed !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 100svh - 100vh) !important;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 100dvh - 100vh) !important;
+        top: auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        z-index: 2147483000 !important;
+        pointer-events: none !important;
+        transform: translate3d(0, var(--mobile-nav-shift, 0px), 0) !important;
+        -webkit-transform: translate3d(0, var(--mobile-nav-shift, 0px), 0) !important;
+        background: transparent !important;
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+    }
     .mobile-footer-nav {
         display: flex !important;
         visibility: visible !important;
         pointer-events: auto !important;
         opacity: 1 !important;
-        position: fixed !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
+        position: relative !important;
+        left: auto !important;
+        right: auto !important;
+        bottom: auto !important;
         top: auto !important;
         width: 100% !important;
         max-width: 100% !important;
@@ -75,12 +99,10 @@ body {
         border-bottom: none;
         justify-content: space-around;
         align-items: center;
-        z-index: 2147483000 !important;
+        z-index: 1 !important;
         min-height: var(--mobile-nav-height);
         box-sizing: border-box;
         box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
-        -webkit-backface-visibility: hidden;
-        backface-visibility: hidden;
         overflow: visible;
         touch-action: manipulation;
     }

@@ -75,6 +75,7 @@ $is_nav_search = (
 
 $mobile_footer_nav_rendered = true;
 ?>
+<div class="mobile-footer-nav-host" id="mobile-footer-nav-host">
 <nav class="mobile-footer-nav" id="mobile-footer-nav" aria-label="Mobile navigation">
     <a href="<?php echo BASE_URL; ?>/" class="nav-item<?php echo $is_nav_home ? ' active' : ''; ?>">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -120,3 +121,4 @@ $mobile_footer_nav_rendered = true;
         <span>Search</span>
     </a>
 </nav>
+</div>
