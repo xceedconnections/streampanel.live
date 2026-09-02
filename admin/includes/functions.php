@@ -154,7 +154,7 @@ function getSlidersForPage($conn, $page) {
     
     // Get slides for each slider
     foreach ($sliders as &$slider) {
-        $stmt = $conn->prepare("SELECT * FROM slider_slides WHERE slider_id = ? AND is_active = 1 ORDER BY display_order ASC, created_at ASC");
+        $stmt = $conn->prepare("SELECT * FROM slider_slides WHERE slider_id = ? AND is_active = 1 ORDER BY display_order ASC, id ASC");
         $stmt->bind_param("i", $slider['id']);
         $stmt->execute();
         $slider['slides'] = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);

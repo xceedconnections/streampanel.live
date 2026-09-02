@@ -7,15 +7,19 @@ $page_title = "Manage Sliders";
 
 require_once __DIR__ . '/includes/slider_admin.php';
 ensureSliderAdminSchema($conn);
-[$message, $message_type] = sliderAdminTakeFlash();
+list($message, $message_type) = sliderAdminTakeFlash();
 
 $slider_form_action = 'index.php?tab=sliders';
 
 // Get all sliders
-$sliders = $conn->query("SELECT s.*, 
+$sliders = [];
+$slidersResult = $conn->query("SELECT s.*, 
     (SELECT COUNT(*) FROM slider_slides WHERE slider_id = s.id) as slide_count
     FROM sliders s 
-    ORDER BY s.display_order ASC, s.created_at DESC")->fetch_all(MYSQLI_ASSOC);
+    ORDER BY s.display_order ASC, s.id DESC");
+if ($slidersResult) {
+    $sliders = $slidersResult->fetch_all(MYSQLI_ASSOC);
+}
 
 // Get current slider and its slides
 $current_slider = null;
@@ -35,10 +39,11 @@ if ($slider_id) {
     $current_slider = $stmt->get_result()->fetch_assoc();
     
     if ($current_slider) {
-        $stmt = $conn->prepare("SELECT * FROM slider_slides WHERE slider_id = ? ORDER BY display_order ASC, created_at ASC");
+        $stmt = $conn->prepare("SELECT * FROM slider_slides WHERE slider_id = ? ORDER BY display_order ASC, id ASC");
         $stmt->bind_param("i", $slider_id);
         $stmt->execute();
-        $current_slides = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $slideResult = $stmt->get_result();
+        $current_slides = $slideResult ? $slideResult->fetch_all(MYSQLI_ASSOC) : [];
     }
 }
 
@@ -57,9 +62,21 @@ if (isset($_GET['edit_slide'])) {
 
 // Get movies, TV shows, and Live TV channels for dropdowns + autofill
 require_once __DIR__ . '/../includes/movie_helpers.php';
-$movies_raw = $conn->query("SELECT id, title, description, poster, thumbnail, backdrop FROM movies WHERE COALESCE(is_active, 1) = 1 ORDER BY title ASC")->fetch_all(MYSQLI_ASSOC) ?: [];
-$tv_shows_raw = $conn->query("SELECT id, title, description, poster, thumbnail FROM tv_shows WHERE COALESCE(is_active, 1) = 1 ORDER BY title ASC")->fetch_all(MYSQLI_ASSOC) ?: [];
-$live_tv_raw = $conn->query("SELECT id, name, description, logo FROM live_tv_channels WHERE COALESCE(is_active, 1) = 1 ORDER BY name ASC")->fetch_all(MYSQLI_ASSOC) ?: [];
+$movies_raw = [];
+$moviesQuery = $conn->query("SELECT id, title, description, poster, thumbnail, backdrop FROM movies WHERE COALESCE(is_active, 1) = 1 ORDER BY title ASC");
+if ($moviesQuery) {
+    $movies_raw = $moviesQuery->fetch_all(MYSQLI_ASSOC);
+}
+$tv_shows_raw = [];
+$tvShowsQuery = $conn->query("SELECT id, title, description, poster, thumbnail FROM tv_shows WHERE COALESCE(is_active, 1) = 1 ORDER BY title ASC");
+if ($tvShowsQuery) {
+    $tv_shows_raw = $tvShowsQuery->fetch_all(MYSQLI_ASSOC);
+}
+$live_tv_raw = [];
+$liveTvQuery = $conn->query("SELECT id, name, description, logo FROM live_tv_channels WHERE COALESCE(is_active, 1) = 1 ORDER BY name ASC");
+if ($liveTvQuery) {
+    $live_tv_raw = $liveTvQuery->fetch_all(MYSQLI_ASSOC);
+}
 
 $movies = [];
 foreach ($movies_raw as $m) {

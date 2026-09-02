@@ -3,7 +3,7 @@
  * Slider admin schema + request handlers (must run before HTML output).
  */
 
-function ensureSliderAdminSchema(mysqli $conn): void
+function ensureSliderAdminSchema($conn)
 {
     static $done = false;
     if ($done) {
@@ -27,16 +27,20 @@ function ensureSliderAdminSchema(mysqli $conn): void
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-        $columns = [
+        $sliderColumns = [
+            'display_order' => "ALTER TABLE sliders ADD COLUMN display_order INT DEFAULT 0",
+            'is_active' => "ALTER TABLE sliders ADD COLUMN is_active TINYINT(1) DEFAULT 1",
             'display_on_home' => "ALTER TABLE sliders ADD COLUMN display_on_home TINYINT(1) DEFAULT 0",
             'display_on_movies' => "ALTER TABLE sliders ADD COLUMN display_on_movies TINYINT(1) DEFAULT 0",
             'display_on_tv_shows' => "ALTER TABLE sliders ADD COLUMN display_on_tv_shows TINYINT(1) DEFAULT 0",
             'display_on_live_tv' => "ALTER TABLE sliders ADD COLUMN display_on_live_tv TINYINT(1) DEFAULT 0",
             'auto_rotate' => "ALTER TABLE sliders ADD COLUMN auto_rotate TINYINT(1) DEFAULT 1",
             'rotate_interval' => "ALTER TABLE sliders ADD COLUMN rotate_interval INT DEFAULT 5000",
+            'created_at' => "ALTER TABLE sliders ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            'updated_at' => "ALTER TABLE sliders ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
         ];
 
-        foreach ($columns as $column => $sql) {
+        foreach ($sliderColumns as $column => $sql) {
             $check = $conn->query("SHOW COLUMNS FROM sliders LIKE '" . $conn->real_escape_string($column) . "'");
             if ($check && $check->num_rows === 0) {
                 @$conn->query($sql);
@@ -58,12 +62,25 @@ function ensureSliderAdminSchema(mysqli $conn): void
             INDEX idx_slider_id (slider_id),
             INDEX idx_display_order (display_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-    } catch (Throwable $e) {
+
+        $slideColumns = [
+            'display_order' => "ALTER TABLE slider_slides ADD COLUMN display_order INT DEFAULT 0",
+            'is_active' => "ALTER TABLE slider_slides ADD COLUMN is_active TINYINT(1) DEFAULT 1",
+            'created_at' => "ALTER TABLE slider_slides ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        ];
+
+        foreach ($slideColumns as $column => $sql) {
+            $check = $conn->query("SHOW COLUMNS FROM slider_slides LIKE '" . $conn->real_escape_string($column) . "'");
+            if ($check && $check->num_rows === 0) {
+                @$conn->query($sql);
+            }
+        }
+    } catch (Exception $e) {
         error_log('Slider schema update error: ' . $e->getMessage());
     }
 }
 
-function sliderAdminFlash(string $type, string $message): void
+function sliderAdminFlash($type, $message)
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
         @session_start();
@@ -72,7 +89,7 @@ function sliderAdminFlash(string $type, string $message): void
     $_SESSION['slider_admin_message_type'] = $type;
 }
 
-function sliderAdminRedirect(string $location): void
+function sliderAdminRedirect($location)
 {
     if (!headers_sent()) {
         header('Location: ' . $location);
@@ -83,7 +100,7 @@ function sliderAdminRedirect(string $location): void
     exit;
 }
 
-function processSliderAdminRequests(mysqli $conn): void
+function processSliderAdminRequests($conn)
 {
     ensureSliderAdminSchema($conn);
 
@@ -359,7 +376,7 @@ function processSliderAdminRequests(mysqli $conn): void
     }
 }
 
-function sliderAdminTakeFlash(): array
+function sliderAdminTakeFlash()
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
         @session_start();
