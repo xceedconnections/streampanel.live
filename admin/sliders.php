@@ -310,10 +310,52 @@ if (isset($_GET['edit_slide'])) {
     }
 }
 
-// Get movies, TV shows, and Live TV channels for dropdowns
-$movies = $conn->query("SELECT id, title FROM movies ORDER BY title ASC")->fetch_all(MYSQLI_ASSOC);
-$tv_shows = $conn->query("SELECT id, title FROM tv_shows ORDER BY title ASC")->fetch_all(MYSQLI_ASSOC);
-$live_tv_channels = $conn->query("SELECT id, name FROM live_tv_channels ORDER BY name ASC")->fetch_all(MYSQLI_ASSOC);
+// Get movies, TV shows, and Live TV channels for dropdowns + autofill
+require_once __DIR__ . '/../includes/movie_helpers.php';
+$movies_raw = $conn->query("SELECT id, title, description, poster, thumbnail, backdrop FROM movies WHERE COALESCE(is_active, 1) = 1 ORDER BY title ASC")->fetch_all(MYSQLI_ASSOC) ?: [];
+$tv_shows_raw = $conn->query("SELECT id, title, description, poster, thumbnail FROM tv_shows WHERE COALESCE(is_active, 1) = 1 ORDER BY title ASC")->fetch_all(MYSQLI_ASSOC) ?: [];
+$live_tv_raw = $conn->query("SELECT id, name, description, logo FROM live_tv_channels WHERE COALESCE(is_active, 1) = 1 ORDER BY name ASC")->fetch_all(MYSQLI_ASSOC) ?: [];
+
+$movies = [];
+foreach ($movies_raw as $m) {
+    $img = movieBackdropUrl($m);
+    if ($img === '') {
+        $img = moviePosterUrl($m);
+    }
+    $movies[] = [
+        'id' => (int) $m['id'],
+        'title' => (string) ($m['title'] ?? ''),
+        'description' => (string) ($m['description'] ?? ''),
+        'image' => $img,
+    ];
+}
+$tv_shows = [];
+foreach ($tv_shows_raw as $s) {
+    $img = trim((string) ($s['poster'] ?? ''));
+    if ($img === '') {
+        $img = trim((string) ($s['thumbnail'] ?? ''));
+    }
+    $tv_shows[] = [
+        'id' => (int) $s['id'],
+        'title' => (string) ($s['title'] ?? ''),
+        'description' => (string) ($s['description'] ?? ''),
+        'image' => $img,
+    ];
+}
+$live_tv_channels = [];
+foreach ($live_tv_raw as $c) {
+    $live_tv_channels[] = [
+        'id' => (int) $c['id'],
+        'title' => (string) ($c['name'] ?? ''),
+        'description' => (string) ($c['description'] ?? ''),
+        'image' => (string) ($c['logo'] ?? ''),
+    ];
+}
+$slide_catalog_json = json_encode([
+    'movie' => $movies,
+    'tv_show' => $tv_shows,
+    'live_tv' => $live_tv_channels,
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 <div class="mb-8">
     <h1 class="text-4xl font-bold mb-2">Manage Sliders</h1>
@@ -541,255 +583,6 @@ if ($edit_slider_id) {
 </div>
 <?php endif; ?>
 
-<!-- Add/Edit Slide Form -->
-<div class="bg-gray-900 rounded-lg p-6 mb-6">
-    <h3 class="text-xl font-bold mb-4"><?php echo $edit_slide ? 'Edit' : 'Add'; ?> Slide</h3>
-    <p class="text-sm text-gray-400 mb-4">
-        Home page trending banner uses sliders with <strong>Display on Home</strong> checked.
-        For <strong>Movie</strong> slides: leave title/description/image empty to auto-use the movie banner, plot, and Play link.
-        For <strong>TV Show / Live TV</strong>: enter title, description, and image manually — Play link is automatic from the selected item.
-    </p>
-    <form method="POST" action="" enctype="multipart/form-data">
-        <input type="hidden" name="save_slide" value="1">
-        <input type="hidden" name="slider_id" value="<?php echo $current_slider['id']; ?>">
-        <?php if ($edit_slide): ?>
-        <input type="hidden" name="slide_id" value="<?php echo $edit_slide['id']; ?>">
-        <?php endif; ?>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-                <label class="block text-sm font-semibold mb-2">Title <span class="text-gray-500 font-normal">(optional for Movie — auto-filled)</span></label>
-                <input type="text" name="slide_title" value="<?php echo htmlspecialchars($edit_slide['title'] ?? ''); ?>"
-                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
-            </div>
-            <div>
-                <label class="block text-sm font-semibold mb-2">Display Order</label>
-                <input type="number" name="slide_display_order" value="<?php echo $edit_slide['display_order'] ?? 0; ?>"
-                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
-            </div>
-        </div>
-        
-        <div class="mb-4">
-            <label class="block text-sm font-semibold mb-2">Description <span class="text-gray-500 font-normal">(optional for Movie)</span></label>
-            <textarea name="slide_description" rows="2"
-                      class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white"><?php echo htmlspecialchars($edit_slide['description'] ?? ''); ?></textarea>
-        </div>
-        
-        <div class="mb-4">
-            <label class="block text-sm font-semibold mb-2">Upload Image <span class="text-gray-500 font-normal">(optional for Movie — uses movie banner)</span></label>
-            <input type="file" name="slide_image_file" id="slide_image_file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                   class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white"
-                   onchange="previewImage(this)">
-            <p class="text-xs text-gray-400 mt-1">Upload image (JPG, PNG, GIF, WEBP) - Max 5MB</p>
-        </div>
-        
-        <div class="mb-4" id="image_preview_container" style="display: <?php echo !empty($edit_slide['image_url']) ? 'block' : 'none'; ?>;">
-            <label class="block text-sm font-semibold mb-2">Image Preview</label>
-            <div class="relative inline-block">
-                <img id="image_preview" src="<?php echo !empty($edit_slide['image_url']) ? htmlspecialchars($edit_slide['image_url']) : ''; ?>" 
-                     alt="Preview" 
-                     class="max-w-full h-64 object-contain border border-gray-700 rounded"
-                     onerror="this.style.display='none'; document.getElementById('image_preview_container').style.display='none';">
-                <?php if (!empty($edit_slide['image_url'])): ?>
-                <button type="button" onclick="clearImagePreview()" 
-                        class="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 flex items-center justify-center">
-                    <i class="fas fa-times"></i>
-                </button>
-                <?php endif; ?>
-            </div>
-        </div>
-        
-        <div class="mb-4">
-            <label class="block text-sm font-semibold mb-2">Or Enter Image URL</label>
-            <input type="text" name="slide_image_url" id="slide_image_url" value="<?php echo htmlspecialchars($edit_slide['image_url'] ?? ''); ?>"
-                   class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white"
-                   placeholder="https://example.com/image.jpg"
-                   onchange="updateImagePreview(this.value)">
-            <p class="text-xs text-gray-400 mt-1">Leave empty if uploading a file above</p>
-        </div>
-        
-        <div class="mb-4">
-                <label class="block text-sm font-semibold mb-2">Link Type</label>
-            <select name="slide_link_type" id="slide_link_type" onchange="updateLinkFields()"
-                    class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
-                <option value="external" <?php echo ($edit_slide['link_type'] ?? 'external') === 'external' ? 'selected' : ''; ?>>Custom URL</option>
-                <option value="movie" <?php echo ($edit_slide['link_type'] ?? '') === 'movie' ? 'selected' : ''; ?>>Movie</option>
-                <option value="tv_show" <?php echo ($edit_slide['link_type'] ?? '') === 'tv_show' ? 'selected' : ''; ?>>TV Show</option>
-                <option value="live_tv" <?php echo ($edit_slide['link_type'] ?? '') === 'live_tv' ? 'selected' : ''; ?>>Live TV Channel</option>
-                </select>
-            </div>
-        
-        <div id="link_url_field" class="mb-4" style="display: <?php echo ($edit_slide['link_type'] ?? 'external') === 'external' ? 'block' : 'none'; ?>;">
-            <label class="block text-sm font-semibold mb-2">Custom URL</label>
-            <input type="text" name="slide_link_url" value="<?php echo htmlspecialchars($edit_slide['link_url'] ?? ''); ?>"
-                   class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white"
-                   placeholder="https://example.com">
-            </div>
-        
-        <div id="link_id_field" class="mb-4" style="display: <?php echo ($edit_slide['link_type'] ?? 'external') !== 'external' ? 'block' : 'none'; ?>;">
-            <label class="block text-sm font-semibold mb-2" id="link_id_label">Select Content</label>
-            <select name="slide_link_id" class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
-                <option value="">-- Select --</option>
-                <optgroup label="Movies" id="movies_group" style="display: <?php echo ($edit_slide['link_type'] ?? '') === 'movie' ? 'block' : 'none'; ?>;">
-                    <?php foreach ($movies as $movie): ?>
-                    <option value="<?php echo $movie['id']; ?>" <?php echo ($edit_slide['link_id'] ?? '') == $movie['id'] && ($edit_slide['link_type'] ?? '') === 'movie' ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($movie['title']); ?>
-                    </option>
-                    <?php endforeach; ?>
-                </optgroup>
-                <optgroup label="TV Shows" id="tv_shows_group" style="display: <?php echo ($edit_slide['link_type'] ?? '') === 'tv_show' ? 'block' : 'none'; ?>;">
-                    <?php foreach ($tv_shows as $show): ?>
-                    <option value="<?php echo $show['id']; ?>" <?php echo ($edit_slide['link_id'] ?? '') == $show['id'] && ($edit_slide['link_type'] ?? '') === 'tv_show' ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($show['title']); ?>
-                    </option>
-                    <?php endforeach; ?>
-                </optgroup>
-                <optgroup label="Live TV Channels" id="live_tv_group" style="display: <?php echo ($edit_slide['link_type'] ?? '') === 'live_tv' ? 'block' : 'none'; ?>;">
-                    <?php foreach ($live_tv_channels as $channel): ?>
-                    <option value="<?php echo $channel['id']; ?>" <?php echo ($edit_slide['link_id'] ?? '') == $channel['id'] && ($edit_slide['link_type'] ?? '') === 'live_tv' ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($channel['name']); ?>
-                    </option>
-                    <?php endforeach; ?>
-                </optgroup>
-            </select>
-        </div>
-        
-        <div class="mb-4">
-            <label class="flex items-center">
-                <input type="checkbox" name="slide_is_active" value="1" <?php echo ($edit_slide['is_active'] ?? true) ? 'checked' : ''; ?> class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
-                <span>Active</span>
-            </label>
-        </div>
-        
-        <button type="submit" class="bg-netflix-red px-6 py-2 rounded hover:bg-red-700 font-semibold">
-            <?php echo $edit_slide ? 'Update' : 'Add'; ?> Slide
-        </button>
-        <?php if ($edit_slide): ?>
-        <a href="?tab=sliders&slider_id=<?php echo $current_slider['id']; ?>" class="bg-gray-700 px-6 py-2 rounded hover:bg-gray-600 ml-2">Cancel</a>
-        <?php endif; ?>
-    </form>
-</div>
-
-<!-- Slides List -->
-<div class="bg-gray-900 rounded-lg p-6">
-    <h3 class="text-xl font-bold mb-4">Slides (<?php echo count($current_slides); ?>)</h3>
-    <?php if (empty($current_slides)): ?>
-    <p class="text-gray-400">No slides added yet. Add your first slide above.</p>
-    <?php else: ?>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <?php foreach ($current_slides as $slide): ?>
-        <div class="bg-gray-800 rounded-lg p-4">
-            <?php if ($slide['image_url']): ?>
-            <img src="<?php echo htmlspecialchars($slide['image_url']); ?>" alt="<?php echo htmlspecialchars($slide['title'] ?? 'Slide'); ?>"
-                 class="w-full h-40 object-cover rounded mb-3">
-            <?php endif; ?>
-            <h4 class="font-semibold mb-2"><?php echo htmlspecialchars($slide['title'] ?? 'Untitled Slide'); ?></h4>
-            <?php if ($slide['description']): ?>
-            <p class="text-sm text-gray-400 mb-2"><?php echo htmlspecialchars(substr($slide['description'], 0, 50)); ?><?php echo strlen($slide['description']) > 50 ? '...' : ''; ?></p>
-            <?php endif; ?>
-            <div class="text-xs text-gray-400 mb-2">
-                Link: <?php 
-                if ($slide['link_type'] === 'movie') echo 'Movie #' . $slide['link_id'];
-                elseif ($slide['link_type'] === 'tv_show') echo 'TV Show #' . $slide['link_id'];
-                elseif ($slide['link_type'] === 'live_tv') echo 'Live TV #' . $slide['link_id'];
-                else echo 'Custom URL';
-                ?>
-            </div>
-            <div class="flex items-center justify-between">
-                <span class="px-2 py-1 rounded text-xs <?php echo $slide['is_active'] ? 'bg-green-900 text-green-200' : 'bg-gray-700 text-gray-300'; ?>">
-                    <?php echo $slide['is_active'] ? 'Active' : 'Inactive'; ?>
-                </span>
-                <div class="flex gap-2">
-                    <a href="?tab=sliders&slider_id=<?php echo $current_slider['id']; ?>&edit_slide=<?php echo $slide['id']; ?>" 
-                       class="text-blue-400 hover:text-blue-300 text-sm">Edit</a>
-                    <a href="?tab=sliders&slider_id=<?php echo $current_slider['id']; ?>&delete_slide=<?php echo $slide['id']; ?>" 
-                       onclick="return confirm('Delete this slide?')"
-                       class="text-red-400 hover:text-red-300 text-sm">Delete</a>
-                </div>
-            </div>
-        </div>
-        <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-</div>
-
-<script>
-function previewImage(input) {
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const preview = document.getElementById('image_preview');
-            const container = document.getElementById('image_preview_container');
-            preview.src = e.target.result;
-            container.style.display = 'block';
-            // Clear URL field when file is selected
-            document.getElementById('slide_image_url').value = '';
-        };
-        reader.readAsDataURL(input.files[0]);
-    }
-}
-
-function updateImagePreview(url) {
-    if (url) {
-        const preview = document.getElementById('image_preview');
-        const container = document.getElementById('image_preview_container');
-        preview.src = url;
-        preview.onerror = function() {
-            container.style.display = 'none';
-        };
-        preview.onload = function() {
-            container.style.display = 'block';
-        };
-        // Clear file input when URL is entered
-        document.getElementById('slide_image_file').value = '';
-    }
-}
-
-function clearImagePreview() {
-    document.getElementById('image_preview').src = '';
-    document.getElementById('image_preview_container').style.display = 'none';
-    document.getElementById('slide_image_file').value = '';
-    document.getElementById('slide_image_url').value = '';
-}
-
-function updateLinkFields() {
-    const linkType = document.getElementById('slide_link_type').value;
-    const linkUrlField = document.getElementById('link_url_field');
-    const linkIdField = document.getElementById('link_id_field');
-    const linkIdLabel = document.getElementById('link_id_label');
-    const moviesGroup = document.getElementById('movies_group');
-    const tvShowsGroup = document.getElementById('tv_shows_group');
-    const liveTvGroup = document.getElementById('live_tv_group');
-    const linkIdSelect = linkIdField.querySelector('select');
-    
-    if (linkType === 'external') {
-        linkUrlField.style.display = 'block';
-        linkIdField.style.display = 'none';
-    } else {
-        linkUrlField.style.display = 'none';
-        linkIdField.style.display = 'block';
-        
-        // Hide all optgroups
-        moviesGroup.style.display = 'none';
-        tvShowsGroup.style.display = 'none';
-        liveTvGroup.style.display = 'none';
-        
-        // Show relevant optgroup
-        if (linkType === 'movie') {
-            linkIdLabel.textContent = 'Select Movie';
-            moviesGroup.style.display = 'block';
-        } else if (linkType === 'tv_show') {
-            linkIdLabel.textContent = 'Select TV Show';
-            tvShowsGroup.style.display = 'block';
-        } else if (linkType === 'live_tv') {
-            linkIdLabel.textContent = 'Select Live TV Channel';
-            liveTvGroup.style.display = 'block';
-        }
-        
-        // Reset selection
-        linkIdSelect.value = '';
-    }
-}
-</script>
+<?php include __DIR__ . '/includes/slider-slide-form.php'; ?>
 
 <?php endif; ?>
