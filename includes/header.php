@@ -111,7 +111,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="mobile-web-app-capable" content="yes">
     <title><?php echo isset($page_title) ? $page_title . ' - ' : ''; ?><?php echo htmlspecialchars($site_name); ?></title>
     <?php if (isset($meta_description) && !empty($meta_description)): ?>
@@ -167,92 +167,14 @@ $current_page = basename($_SERVER['PHP_SELF']);
             backdrop-filter: blur(10px);
         }
         
-        /* Mobile Footer Navigation - always fixed at bottom */
-        :root {
-            --mobile-nav-height: 60px;
-        }
-        .mobile-footer-nav {
-            display: flex !important;
-            position: fixed !important;
-            bottom: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            width: 100% !important;
-            max-width: 100vw !important;
-            background: rgba(20, 20, 20, 0.98);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            justify-content: space-around;
-            align-items: center;
-            padding: 0.35rem 0 calc(0.35rem + env(safe-area-inset-bottom, 0px));
-            z-index: 99999 !important;
-            height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
-            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
-            transform: none !important;
-            pointer-events: auto;
-        }
-        body:has(.mobile-footer-nav) {
-            padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
-        }
-        body:has(.mobile-footer-nav) .page-container,
-        body:has(.mobile-footer-nav) .home-page,
-        body:has(.mobile-footer-nav) .search-page,
-        body:has(.mobile-footer-nav) .actor-page {
-            min-height: auto;
-            padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
-        }
-        @media (max-width: 767px) {
-            .site-footer-desktop {
-                display: none;
-            }
-        }
-        .mobile-footer-nav .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 0.25rem;
-            padding: 0.5rem 0.75rem;
-            color: #9ca3af;
-            text-decoration: none;
-            transition: all 0.2s ease;
-            border-radius: 0.5rem;
-            min-width: 60px;
-            flex: 1;
-            max-width: 100px;
-        }
-        .mobile-footer-nav .nav-item svg {
-            width: 24px;
-            height: 24px;
-            stroke-width: 2;
-            transition: all 0.2s ease;
-        }
-        .mobile-footer-nav .nav-item span {
-            font-size: 0.7rem;
-            font-weight: 500;
-            transition: all 0.2s ease;
-        }
-        .mobile-footer-nav .nav-item:active {
-            transform: scale(0.95);
-        }
-        .mobile-footer-nav .nav-item.active,
-        .mobile-footer-nav .nav-item:hover {
-            color: #e50914;
-            background: rgba(229, 9, 20, 0.1);
-        }
-        .mobile-footer-nav .nav-item.active svg,
-        .mobile-footer-nav .nav-item:hover svg {
-            stroke-width: 2.5;
-            transform: scale(1.1);
-        }
-        .mobile-footer-nav .nav-item.active span,
-        .mobile-footer-nav .nav-item:hover span {
-            font-weight: 600;
-        }
+        <?php include __DIR__ . '/mobile-footer-nav-styles.php'; ?>
     </style>
 </head>
 <body class="bg-black text-white">
+    <?php
+    $mobile_nav_path = $_SERVER['REQUEST_URI'] ?? '';
+    include __DIR__ . '/mobile-footer-nav.php';
+    ?>
     <nav class="fixed top-0 left-0 right-0 z-50 navbar-blur">
         <div class="container mx-auto px-4 py-3 flex items-center justify-between">
             <div class="flex items-center space-x-8">
@@ -359,3 +281,4 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </script>
     
     <div class="pt-16">
+    <?php $site_content_wrapper_open = true; ?>

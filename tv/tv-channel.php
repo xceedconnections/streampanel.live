@@ -965,26 +965,28 @@ if ($channel) {
     color: #fde047;
 }
 
-/* Mobile Footer Navigation - Android TV/Phone Style */
+/* Mobile Footer Navigation - pinned; global styles in header also apply */
 .mobile-footer-nav {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
     background: rgba(20, 20, 20, 0.98);
     backdrop-filter: blur(10px);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     justify-content: space-around;
     align-items: center;
-    padding: 0.5rem 0;
-    z-index: 1000;
-    height: 60px;
+    padding: 0.5rem 0 calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    z-index: 2147483000 !important;
+    height: calc(60px + env(safe-area-inset-bottom, 0px));
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+    transform: translate3d(0, 0, 0);
 }
 @media (min-width: 768px) {
     .mobile-footer-nav {
-        display: none; /* Hide on desktop */
+        display: none !important;
     }
 }
 .mobile-footer-nav .nav-item {
@@ -1741,8 +1743,10 @@ if ($channel) {
     border-color: rgba(255, 255, 255, 0.3);
 }
     </style>
+    <style><?php include __DIR__ . '/../includes/mobile-footer-nav-styles.php'; ?></style>
 </head>
 <body class="bg-black text-white">
+<?php include __DIR__ . '/../includes/mobile-footer-nav.php'; ?>
 
 <?php if ($error || !$channel): ?>
     <div class="error-page">
@@ -4063,10 +4067,11 @@ if ($channel) {
 <?php endif; ?>
 
 <?php if ($channel && !empty($footer_heading)): ?>
-    <!-- Channel SEO Footer Heading -->
-    <div class="container mx-auto px-4 py-8 text-center">
+    <div class="watch-seo-heading container mx-auto px-4 py-8 text-center">
         <h1 class="text-2xl md:text-3xl font-bold text-white mb-4"><?php echo htmlspecialchars($footer_heading); ?></h1>
     </div>
 <?php endif; ?>
 
-<?php include __DIR__ . '/../includes/footer.php'; ?>
+<?php
+$minimal_site_footer = true;
+include __DIR__ . '/../includes/footer.php';

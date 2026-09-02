@@ -516,84 +516,12 @@ include 'includes/header.php';
             background-color: #e50914;
         }
         
-        /* Mobile Footer Navigation - Android TV/Phone Style */
-        .mobile-footer-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: rgba(20, 20, 20, 0.98);
-            backdrop-filter: blur(10px);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            padding: 0.5rem 0;
-            z-index: 1000;
-            height: 60px;
-            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
-        }
-        @media (min-width: 768px) {
-            .mobile-footer-nav {
-                display: none; /* Hide on desktop */
-            }
-        }
-        .mobile-footer-nav .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 0.25rem;
-            padding: 0.5rem 0.75rem;
-            color: #9ca3af;
-            text-decoration: none;
-            transition: all 0.2s ease;
-            border-radius: 0.5rem;
-            min-width: 60px;
-            flex: 1;
-            max-width: 100px;
-        }
-        .mobile-footer-nav .nav-item svg {
-            width: 24px;
-            height: 24px;
-            stroke-width: 2;
-            transition: all 0.2s ease;
-        }
-        .mobile-footer-nav .nav-item span {
-            font-size: 0.7rem;
-            font-weight: 500;
-            transition: all 0.2s ease;
-        }
-        .mobile-footer-nav .nav-item:active {
-            transform: scale(0.95);
-        }
-        .mobile-footer-nav .nav-item.active,
-        .mobile-footer-nav .nav-item:hover {
-            color: #e50914;
-            background: rgba(229, 9, 20, 0.1);
-        }
-        .mobile-footer-nav .nav-item.active svg,
-        .mobile-footer-nav .nav-item:hover svg {
-            stroke-width: 2.5;
-            transform: scale(1.1);
-        }
-        .mobile-footer-nav .nav-item.active span,
-        .mobile-footer-nav .nav-item:hover span {
-            font-weight: 600;
-        }
-        
-        /* Add bottom padding to body for mobile footer */
-        body {
-            padding-bottom: 60px;
-        }
-        @media (min-width: 768px) {
-            body {
-                padding-bottom: 0;
-            }
-        }
+        /* Mobile Footer Navigation */
+        <?php include __DIR__ . '/includes/mobile-footer-nav-styles.php'; ?>
     </style>
 </head>
 <body>
+<?php include __DIR__ . '/includes/mobile-footer-nav.php'; ?>
     <?php
 }
 
@@ -1358,12 +1286,9 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
 </div>
 
 <?php
-// For standalone player layouts (TV episodes / movies)
 if ($use_standalone_watch_layout) {
-    // TV episodes don't have the site header wrapper
-    echo '';
+    $minimal_site_footer = true;
 }
-// Include footer for all content types
 include 'includes/footer.php';
 ?>
 

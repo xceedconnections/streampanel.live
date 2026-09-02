@@ -99,6 +99,34 @@ include 'includes/header.php';
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 1.5rem;
+    align-items: start;
+}
+@media (max-width: 767px) {
+    .movie-detail-inner {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+        padding: 1.25rem 1rem 2rem;
+    }
+    .movie-detail-poster-wrap {
+        width: 100%;
+        max-width: 220px;
+        margin: 0 auto;
+    }
+    .movie-detail-info {
+        width: 100%;
+        min-width: 0;
+    }
+    .movie-detail-title,
+    .movie-meta-row,
+    .movie-detail-info p,
+    .movie-detail-info .mb-3,
+    .movie-cta-row,
+    .movie-source-count {
+        width: 100%;
+    }
+    .movie-meta-row {
+        gap: 0.5rem 0.75rem;
+    }
 }
 @media (min-width: 768px) {
     .movie-detail-inner {
@@ -373,16 +401,16 @@ include 'includes/header.php';
 }
 </style>
 
-<div class="bg-black min-h-screen text-white">
+<div class="movie-detail-page bg-black min-h-screen text-white">
     <div class="movie-detail-hero">
-        <div class="movie-detail-hero-bg" style="background-image:url('%3C?php echo htmlspecialchars($backdrop')"></div>
+        <div class="movie-detail-hero-bg" style="background-image:url('<?php echo htmlspecialchars($backdrop); ?>')"></div>
         <div class="movie-detail-hero-overlay"></div>
         <div class="movie-detail-inner">
             <div class="movie-detail-poster-wrap">
                 <?php renderMoviePosterBadges($movie); ?>
                 <img src="<?php echo htmlspecialchars($poster); ?>" alt="<?php echo htmlspecialchars($movie['title']); ?>" class="movie-detail-poster" onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
             </div>
-            <div>
+            <div class="movie-detail-info">
                 <h1 class="movie-detail-title"><?php echo htmlspecialchars($movie['title']); ?></h1>
                 <div class="movie-meta-row">
                     <?php foreach ($tags as $tag): ?>
@@ -423,23 +451,6 @@ include 'includes/header.php';
                     &nbsp;·&nbsp; <?php echo count($downloadLinks); ?> download<?php echo count($downloadLinks) === 1 ? '' : 's'; ?>
                     <?php endif; ?>
                 </p>
-                <?php endif; ?>
-
-                <?php if (!empty($watchSources)): ?>
-                <div class="movie-quality-section">
-                    <h3>Watch FROM</h3>
-                    <div class="quality-links-row">
-                        <?php foreach ($watchSources as $idx => $source): ?>
-                        <?php
-                            $qualityLabel = getMovieSourceDisplayLabel($source, $idx);
-                            $qualityWatchUrl = resolveMovieWatchHref($movie, $movieAccess, $idx, $conn);
-                        ?>
-                        <a href="<?php echo htmlspecialchars($qualityWatchUrl); ?>" class="quality-link-btn">
-                            <i class="fas fa-play"></i> <?php echo htmlspecialchars($qualityLabel); ?>
-                        </a>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
                 <?php endif; ?>
 
                 <div class="movie-cta-row">

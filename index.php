@@ -108,7 +108,8 @@ include 'includes/header.php';
     min-height: 100vh;
     background: #000;
     color: #fff;
-    overflow-x: hidden;
+    /* clip avoids creating a containing block that breaks position:fixed footers */
+    overflow-x: clip;
 }
 
 /* Hero Section - full-bleed cinematic banner */
