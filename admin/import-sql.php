@@ -116,7 +116,7 @@ if (isset($_GET['error'])) {
     
     <div class="bg-gray-800 rounded-lg p-6">
         <h2 class="text-xl font-bold mb-4">Upload SQL File</h2>
-        <form method="POST" enctype="multipart/form-data" id="uploadForm">
+        <form method="POST" enctype="multipart/form-data" id="uploadForm" data-tool-progress="Uploading and processing SQL...">
             <div class="mb-4">
                 <label class="block text-sm font-semibold mb-2">SQL File *</label>
                 <input type="file" name="sql_file" id="sql_file" accept=".sql" 
@@ -183,3 +183,5 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
 });
 </script>
+
+<?php require __DIR__ . '/includes/tool-progress-ui.php'; ?>

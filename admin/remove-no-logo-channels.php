@@ -145,7 +145,7 @@ foreach ($channels as $ch) {
         </table>
     </div>
 
-    <form method="POST" onsubmit="return confirm('Delete <?php echo (int) $no_logo_count; ?> channel(s) with no logo? This cannot be undone.');">
+    <form method="POST" data-tool-progress="Removing channels without logo..." onsubmit="return confirm('Delete <?php echo (int) $no_logo_count; ?> channel(s) with no logo? This cannot be undone.');">
         <input type="hidden" name="confirm_delete" value="yes">
         <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded transition-colors">
             <i class="fas fa-trash-alt mr-2"></i>Remove all channels with no logo
@@ -164,3 +164,5 @@ foreach ($channels as $ch) {
     </a>
     <?php endif; ?>
 </div>
+
+<?php require __DIR__ . '/includes/tool-progress-ui.php'; ?>

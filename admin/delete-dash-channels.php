@@ -178,7 +178,7 @@ if ($is_preview || $is_process) {
     </div>
 
     <!-- Step 1: Preview button -->
-    <form method="POST" class="mb-6">
+    <form method="POST" data-tool-progress="Scanning DASH channels..." class="mb-6">
         <input type="hidden" name="preview" value="yes">
         <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors">
             <i class="fas fa-search mr-2"></i>Preview DASH-only Channels
@@ -202,7 +202,7 @@ if ($is_preview || $is_process) {
             </div>
         </div>
         
-        <form method="POST" id="deleteForm" onsubmit="return confirm('Are you absolutely sure you want to delete <?php echo count($channels_to_delete); ?> DASH-only channel(s)? This action cannot be undone!');">
+        <form method="POST" data-tool-progress="Deleting DASH channels..." id="deleteForm" onsubmit="return confirm('Are you absolutely sure you want to delete <?php echo count($channels_to_delete); ?> DASH-only channel(s)? This action cannot be undone!');">
             <input type="hidden" name="process" value="yes">
             
             <div class="mb-4 max-h-96 overflow-y-auto border border-gray-700 rounded">
@@ -309,3 +309,5 @@ document.querySelectorAll('.channel-checkbox').forEach(checkbox => {
     });
 });
 </script>
+
+<?php require __DIR__ . '/includes/tool-progress-ui.php'; ?>

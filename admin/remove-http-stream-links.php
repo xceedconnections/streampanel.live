@@ -182,7 +182,7 @@ if ($is_preview || $is_process) {
         </ul>
 
         <!-- Step 1: Preview -->
-        <form method="POST" class="mb-4">
+        <form method="POST" class="mb-4" data-tool-progress="Scanning HTTP stream links...">
             <input type="hidden" name="preview" value="yes">
             <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition-colors">
                 <i class="fas fa-search mr-2"></i>Preview HTTP-only Stream Links
@@ -191,7 +191,7 @@ if ($is_preview || $is_process) {
 
         <!-- Step 2: Run cleanup (shown after preview) -->
         <?php if ($has_run && !$is_process && $stats['http_sources_to_remove'] > 0): ?>
-        <form method="POST" onsubmit="return confirm('This will remove all detected HTTP-only HLS/DASH links (type hls/m3u8/dash) from TV channels. Channels will be preserved. Continue?');">
+        <form method="POST" data-tool-progress="Removing HTTP stream links..." onsubmit="return confirm('This will remove all detected HTTP-only HLS/DASH links (type hls/m3u8/dash) from TV channels. Channels will be preserved. Continue?');">
             <input type="hidden" name="process" value="yes">
             <button type="submit" class="bg-netflix-red hover:bg-red-700 text-white font-bold py-2 px-6 rounded transition-colors">
                 <i class="fas fa-trash-alt mr-2"></i>Confirm & Remove HTTP-only Stream Links
@@ -207,4 +207,6 @@ if ($is_preview || $is_process) {
         <?php endif; ?>
     </div>
 </div>
+
+<?php require __DIR__ . '/includes/tool-progress-ui.php'; ?>
 

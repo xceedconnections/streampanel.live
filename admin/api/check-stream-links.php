@@ -12,110 +12,84 @@ header('Content-Type: application/json');
 
 $conn = getDBConnection();
 
-// Check if stream URL is accessible
-function checkStreamUrl($url, $timeout = 10) {
+// Check if stream URL is accessible (stricter — used for remove-bad tools)
+function checkStreamUrl($url, $timeout = 12) {
     if (empty($url)) {
         return ['status' => 'error', 'message' => 'Empty URL'];
     }
-    
-    // Determine if this is a streaming URL (M3U8, MPD, etc.)
-    $is_streaming_url = false;
+
     $url_lower = strtolower($url);
-    if (strpos($url_lower, '.m3u8') !== false || 
-        strpos($url_lower, '.mpd') !== false || 
-        strpos($url_lower, 'm3u8') !== false ||
-        strpos($url_lower, 'dash') !== false ||
-        strpos($url_lower, 'hls') !== false ||
-        strpos($url_lower, 'master.m3u8') !== false) {
-        $is_streaming_url = true;
-    }
-    
+    $is_hls = (strpos($url_lower, '.m3u8') !== false || strpos($url_lower, 'm3u8') !== false || strpos($url_lower, 'hls') !== false);
+    $is_dash = (strpos($url_lower, '.mpd') !== false || strpos($url_lower, 'dash') !== false);
+    $is_streaming_url = $is_hls || $is_dash;
+
     try {
-        // For streaming URLs, always use GET request (many servers don't support HEAD)
-        // For regular URLs, try HEAD first for efficiency
-        $use_get = $is_streaming_url;
-        
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 6);
         curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
-        
-        if ($use_get) {
-            // For streaming URLs, fetch first 2KB to verify it's accessible
-            curl_setopt($ch, CURLOPT_RANGE, '0-2047');
-            curl_setopt($ch, CURLOPT_NOBODY, false);
-        } else {
-            // For regular URLs, use HEAD request
-            curl_setopt($ch, CURLOPT_NOBODY, true);
-        }
-        
+        curl_setopt($ch, CURLOPT_RANGE, '0-4095');
+        curl_setopt($ch, CURLOPT_NOBODY, false);
+        curl_setopt($ch, CURLOPT_HEADER, true);
+
         $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $http_code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curl_error = curl_error($ch);
+        $content_length = (float) curl_getinfo($ch, CURLINFO_SIZE_DOWNLOAD);
+        $header_size = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         curl_close($ch);
-        
-        // Handle connection errors
+
         if (!empty($curl_error)) {
-            // Critical errors that definitely mean the link is dead
-            if (strpos($curl_error, 'timeout') !== false || 
-                strpos($curl_error, 'Connection refused') !== false ||
-                strpos($curl_error, 'Could not resolve') !== false ||
-                strpos($curl_error, 'SSL') !== false) {
-                return ['status' => 'error', 'message' => $curl_error];
-            }
-            // For other errors, if we used HEAD, retry with GET
-            if (!$use_get) {
-                // Retry with GET request
-                $ch = curl_init($url);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-                curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-                curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-                curl_setopt($ch, CURLOPT_RANGE, '0-2047');
-                curl_setopt($ch, CURLOPT_NOBODY, false);
-                
-                $response = curl_exec($ch);
-                $http_code_retry = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                $curl_error_retry = curl_error($ch);
-                curl_close($ch);
-                
-                if (empty($curl_error_retry) && ($http_code_retry >= 200 && $http_code_retry < 500)) {
-                    return ['status' => 'ok', 'http_code' => $http_code_retry];
-                }
-            }
             return ['status' => 'error', 'message' => $curl_error];
         }
-        
-        // For streaming URLs, be conservative: if we reached here without a low-level
-        // curl error, treat the link as working regardless of HTTP status code.
-        // Many streaming servers respond with unusual codes for partial / probe requests.
-        if ($is_streaming_url) {
-            return [
-                'status' => 'ok',
-                'http_code' => $http_code ?: 'unknown',
-                'note' => 'Streaming URL treated as alive (HTTP check not decisive)'
-            ];
+
+        if ($http_code === 404 || $http_code >= 500) {
+            return ['status' => 'error', 'message' => "HTTP $http_code"];
         }
 
-        // For non-streaming URLs, keep stricter HTTP code handling.
-        // Accept these HTTP codes as "working"
-        // 200, 206 (partial content), 301, 302, 303, 307, 308 (redirects)
+        if ($http_code >= 400 && $http_code !== 403 && $http_code !== 405) {
+            return ['status' => 'error', 'message' => "HTTP $http_code"];
+        }
+
+        // 403/405 with no body => treat as dead for cleanup tools
+        if (($http_code === 403 || $http_code === 405) && $content_length <= 0) {
+            return ['status' => 'error', 'message' => "HTTP $http_code - No content"];
+        }
+
         if ($http_code >= 200 && $http_code < 400) {
+            $body = substr((string) $response, $header_size);
+            if ($is_hls) {
+                if ($content_length > 0 && (stripos($body, '#EXTM3U') !== false || stripos($body, '#EXTINF') !== false || strlen($body) > 10)) {
+                    return ['status' => 'ok', 'http_code' => $http_code];
+                }
+                if ($content_length > 0) {
+                    return ['status' => 'ok', 'http_code' => $http_code];
+                }
+                return ['status' => 'error', 'message' => 'Empty HLS response'];
+            }
+            if ($is_dash) {
+                if ($content_length > 0 && (stripos($body, 'MPD') !== false || stripos($body, '<?xml') !== false || stripos($body, '<MPD') !== false || strlen($body) > 10)) {
+                    return ['status' => 'ok', 'http_code' => $http_code];
+                }
+                if ($content_length > 0) {
+                    return ['status' => 'ok', 'http_code' => $http_code];
+                }
+                return ['status' => 'error', 'message' => 'Empty DASH response'];
+            }
             return ['status' => 'ok', 'http_code' => $http_code];
         }
 
-        return ['status' => 'error', 'message' => "HTTP $http_code"];
-    } catch (Exception $e) {
-        // For streaming URLs, be more lenient - don't delete on exceptions
-        if ($is_streaming_url) {
-            return ['status' => 'ok', 'http_code' => 'unknown', 'note' => 'Exception occurred, assumed working'];
+        if ($is_streaming_url && $content_length > 0) {
+            return ['status' => 'ok', 'http_code' => $http_code ?: 'unknown'];
         }
+
+        return ['status' => 'error', 'message' => 'HTTP ' . ($http_code ?: '0')];
+    } catch (Exception $e) {
         return ['status' => 'error', 'message' => $e->getMessage()];
     }
 }
@@ -159,6 +133,12 @@ if (empty($allowed_types)) {
 // Optional category filter (used by Search & Check Streams tool)
 $filterCategory = $_GET['category'] ?? $_POST['category'] ?? ($inputData['category'] ?? '');
 $filterCategory = trim((string)$filterCategory);
+
+// preview = report only; remove = delete dead sources (default)
+$scanMode = strtolower((string)($_GET['mode'] ?? $_POST['mode'] ?? ($inputData['mode'] ?? 'remove')));
+if (!in_array($scanMode, ['preview', 'remove'], true)) {
+    $scanMode = 'remove';
+}
 
 // Optional specific channel IDs filter (used by Search & Check Streams tool)
 $rawChannelIds = $inputData['channel_ids'] ?? ($_POST['channel_ids'] ?? []);
@@ -226,24 +206,32 @@ if ($action === 'start') {
                     continue;
                 }
 
-                // Only include sources whose explicit type is allowed (HLS/M3U8 or DASH)
-                if (!isset($allowed_types[$type])) {
+                $url_lower = strtolower($url);
+                $looks_hls = (strpos($url_lower, '.m3u8') !== false || strpos($url_lower, 'm3u8') !== false || strpos($url_lower, 'hls') !== false);
+                $looks_dash = (strpos($url_lower, '.mpd') !== false || strpos($url_lower, 'dash') !== false);
+
+                $normalized = $type;
+                if ($type === 'm3u8') {
+                    $normalized = 'hls';
+                }
+                // Infer type from URL when explicit type is missing/wrong
+                if ($normalized !== 'hls' && $normalized !== 'dash') {
+                    if ($looks_hls) {
+                        $normalized = 'hls';
+                    } elseif ($looks_dash) {
+                        $normalized = 'dash';
+                    }
+                }
+
+                if (!isset($allowed_types[$normalized])) {
                     continue;
                 }
 
-                // Additional safety: ensure URL matches expected streaming pattern for its type
-                $url_lower = strtolower($url);
-                if ($type === 'hls') {
-                    if (strpos($url_lower, '.m3u8') === false &&
-                        strpos($url_lower, 'm3u8') === false &&
-                        strpos($url_lower, 'hls') === false) {
-                        continue;
-                    }
-                } elseif ($type === 'dash') {
-                    if (strpos($url_lower, '.mpd') === false &&
-                        strpos($url_lower, 'dash') === false) {
-                        continue;
-                    }
+                if ($normalized === 'hls' && !$looks_hls && $type !== 'hls' && $type !== 'm3u8') {
+                    continue;
+                }
+                if ($normalized === 'dash' && !$looks_dash && $type !== 'dash') {
+                    continue;
                 }
 
                 $all_channels[] = [
@@ -251,7 +239,7 @@ if ($action === 'start') {
                     'channel_name' => $channel['name'],
                     'source_id' => $source['id'] ?? '',
                     'source_url' => $url,
-                    'source_type' => $source['type'] ?? 'embed'
+                    'source_type' => $normalized
                 ];
             }
         }
@@ -265,12 +253,14 @@ if ($action === 'start') {
         'checked' => 0,
         'dead' => 0,
         'alive' => 0,
-        'paused' => false
+        'paused' => false,
+        'mode' => $scanMode
     ];
     
     echo json_encode([
         'success' => true,
         'total' => count($all_channels),
+        'mode' => $scanMode,
         'message' => 'Scan started'
     ]);
     
@@ -306,7 +296,7 @@ if ($action === 'start') {
         $channel_data = $channels[$i];
         $url = $channel_data['source_url'];
         
-        $check_result = checkStreamUrl($url, 8);
+        $check_result = checkStreamUrl($url, 10);
         $checked++;
         
         if ($check_result['status'] === 'ok') {
@@ -326,24 +316,35 @@ if ($action === 'start') {
                 'error' => $check_result['message'] ?? 'Unknown error'
             ];
             
-            // Remove dead link from channel
-            $channel = $conn->prepare("SELECT sources FROM live_tv_channels WHERE id = ?");
-            $channel->bind_param("i", $channel_data['channel_id']);
-            $channel->execute();
-            $result = $channel->get_result();
-            $channel_row = $result->fetch_assoc();
-            
-            $sources = json_decode($channel_row['sources'] ?? '[]', true);
-            if (is_array($sources)) {
-                $sources = array_filter($sources, function($source) use ($channel_data) {
-                    return ($source['id'] ?? '') !== $channel_data['source_id'];
-                });
-                $sources = array_values($sources); // Re-index
+            // Remove dead link only in remove mode
+            $mode = $session_data['mode'] ?? 'remove';
+            if ($mode === 'remove') {
+                $channel = $conn->prepare("SELECT sources FROM live_tv_channels WHERE id = ?");
+                $channel->bind_param("i", $channel_data['channel_id']);
+                $channel->execute();
+                $result = $channel->get_result();
+                $channel_row = $result->fetch_assoc();
                 
-                $sources_json = json_encode($sources);
-                $update = $conn->prepare("UPDATE live_tv_channels SET sources = ? WHERE id = ?");
-                $update->bind_param("si", $sources_json, $channel_data['channel_id']);
-                $update->execute();
+                $sources = json_decode($channel_row['sources'] ?? '[]', true);
+                if (is_array($sources)) {
+                    $sources = array_filter($sources, function($source) use ($channel_data) {
+                        $sid = $source['id'] ?? '';
+                        $surl = $source['url'] ?? '';
+                        if ($channel_data['source_id'] !== '' && $sid === $channel_data['source_id']) {
+                            return false;
+                        }
+                        if ($channel_data['source_id'] === '' && $surl === $channel_data['source_url']) {
+                            return false;
+                        }
+                        return true;
+                    });
+                    $sources = array_values($sources);
+                    
+                    $sources_json = json_encode($sources);
+                    $update = $conn->prepare("UPDATE live_tv_channels SET sources = ? WHERE id = ?");
+                    $update->bind_param("si", $sources_json, $channel_data['channel_id']);
+                    $update->execute();
+                }
             }
         }
     }
@@ -356,7 +357,8 @@ if ($action === 'start') {
         'checked' => $checked,
         'dead' => $dead,
         'alive' => $alive,
-        'paused' => false
+        'paused' => false,
+        'mode' => $session_data['mode'] ?? 'remove'
     ];
     
     $progress = ($checked / $total) * 100;

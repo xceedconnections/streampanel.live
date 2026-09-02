@@ -111,7 +111,7 @@ if (isset($_GET['error'])) {
     
     <div class="bg-gray-800 rounded-lg p-6">
         <h2 class="text-xl font-bold mb-4">Upload File</h2>
-        <form method="POST" enctype="multipart/form-data" id="uploadForm">
+        <form method="POST" enctype="multipart/form-data" id="uploadForm" data-tool-progress="Uploading and processing file...">
             <div class="mb-4">
                 <label class="block text-sm font-semibold mb-2">Excel/CSV File *</label>
                 <input type="file" name="excel_file" id="excel_file" accept=".xlsx,.xls,.csv" 
@@ -178,3 +178,5 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
 });
 </script>
+
+<?php require __DIR__ . '/includes/tool-progress-ui.php'; ?>
