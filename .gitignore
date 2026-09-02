@@ -1,8 +1,10 @@
 # Large files
 uploads/tv-logos.zip
+stream.zip
+_hex.tmp
 
 # Sensitive config files (if any)
-config/config.php
+# config/config.php
 
 # Upload directories (optional - uncomment if you don't want to track uploads)
 # uploads/

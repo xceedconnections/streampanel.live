@@ -12,24 +12,24 @@ A complete Netflix-style streaming portal built with PHP, MySQL, and Tailwind CS
 - **User Profile**: View watch history and favorites
 - **Netflix-Style UI**: Beautiful, responsive design with Tailwind CSS
 
-## Installation
+## Installation (any domain / folder)
 
-1. **Database Setup**:
-   - Import `database.sql` into your MySQL database
-   - Update database credentials in `config/database.php`
+Works at domain root (`https://example.com/`) or a subdirectory (`http://localhost/stream/`) with **no `.htaccess` edits**.
 
-2. **Configuration**:
-   - Update `DB_HOST`, `DB_USER`, `DB_PASS`, and `DB_NAME` in `config/database.php`
-   - Update `SITE_URL` in `config/config.php` if needed
+1. **Upload files** to your web root (e.g. `/www/wwwroot/yoursite` or `htdocs/stream`).
+2. **Create a MySQL database** and import the latest dump:
+   ```bash
+   mysql -u DB_USER -p'DB_PASS' DB_NAME < database.sql
+   ```
+   (`database.sql` is UTF-8 ready for Linux/aaPanel.)
+3. **Connect the database** — edit only `config/database.php`:
+   - `DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`
+4. Ensure Apache has `mod_rewrite` enabled and `AllowOverride All` for the site.
+5. Open the site — `BASE_URL` and `.htaccess` APP_BASE sync automatically.
 
-3. **Default Admin Credentials**:
-   - Username: `admin`
-   - Password: `admin123` (change this after first login!)
-
-4. **Web Server**:
-   - Place files in your web server directory (e.g., `htdocs/stream`)
-   - Ensure PHP and MySQL are running
-   - Access via `http://localhost/stream`
+### Default Admin Credentials
+- Username: `admin`
+- Password: `admin123` (change after first login)
 
 ## File Structure
 

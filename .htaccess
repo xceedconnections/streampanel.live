@@ -1,10 +1,12 @@
 RewriteEngine On
-# Path-agnostic rules: works at / and in any subdirectory (e.g. /stream/)
-# APP_BASE: 
-# No RewriteBase — Apache resolves relative to this folder automatically
+# UNIVERSAL Apache config — works at domain root OR any subdirectory.
+# Auto-synced by config/htaccess.php from detected APP_BASE_PATH.
+# No manual RewriteBase / domain edits needed on deploy.
+# APP_BASE: /stream
+Options -Indexes -MultiViews
+DirectoryIndex index.php index.html
 
-# Movie listing MUST come before the directory pass-through.
-# A physical movies/ folder exists on disk; without this, /movies/ 404s.
+# Listing routes that collide with real folders (must be before -d pass-through)
 RewriteRule ^movies/?$ movies.php [L,QSA]
 
 # API endpoints without .php
@@ -16,12 +18,12 @@ RewriteRule ^api/search-suggest/?$ api/search-suggest.php [L,QSA]
 # Sitemap XML -> PHP
 RewriteRule ^sitemap-tv-channels\.xml$ sitemap-tv-channels.php [L,QSA]
 
-# Pass through real files and directories (except handled routes above)
+# Pass through real files and directories
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Redirect old .php URLs to clean URLs (keeps current install path)
+# Redirect old .php URLs to clean URLs (preserves install path from THE_REQUEST)
 RewriteCond %{THE_REQUEST} \s/+(.+?)\.php([?\s]) [NC]
 RewriteCond %{THE_REQUEST} !/index\.php[?\s] [NC]
 RewriteCond %{THE_REQUEST} !/admin/ [NC]
@@ -68,8 +70,6 @@ RewriteRule ^watch-movie/([a-z0-9-]+)/?$ movies/$1/watch [R=301,L]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(live-tv|movies|movie-detail|tv-shows|profile|login|register|watch|manage-devices|tv-show-detail|report|logout|search|about-us|contact|careers|terms-of-use|privacy-policy|cookie-policy)/?$ $1.php [L,QSA]
-
-Options -Indexes
 
 <FilesMatch "\.(sql|md|log)$">
     Require all denied

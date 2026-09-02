@@ -1,7 +1,8 @@
 <?php
 /**
- * Auto-generate a path-agnostic .htaccess that works at domain root
- * (https://streampanel.live/) and in a subdirectory (http://localhost/stream/).
+ * Auto-generate a UNIVERSAL .htaccess for Apache.
+ * Works at domain root OR any subdirectory without manual edits.
+ * APP_BASE_PATH is detected at runtime; syncHtaccess() keeps the marker in sync.
  */
 
 function generateHtaccessContent(string $basePath = ''): string
@@ -13,12 +14,14 @@ function generateHtaccessContent(string $basePath = ''): string
 
     $lines = [];
     $lines[] = 'RewriteEngine On';
-    $lines[] = '# Path-agnostic rules: works at / and in any subdirectory (e.g. /stream/)';
+    $lines[] = '# UNIVERSAL Apache config — works at domain root OR any subdirectory.';
+    $lines[] = '# Auto-synced by config/htaccess.php from detected APP_BASE_PATH.';
+    $lines[] = '# No manual RewriteBase / domain edits needed on deploy.';
     $lines[] = "# APP_BASE: {$basePath}";
-    $lines[] = '# No RewriteBase — Apache resolves relative to this folder automatically';
+    $lines[] = 'Options -Indexes -MultiViews';
+    $lines[] = 'DirectoryIndex index.php index.html';
     $lines[] = '';
-    $lines[] = '# Movie listing MUST come before the directory pass-through.';
-    $lines[] = '# A physical movies/ folder exists on disk; without this, /movies/ 404s.';
+    $lines[] = '# Listing routes that collide with real folders (must be before -d pass-through)';
     $lines[] = 'RewriteRule ^movies/?$ movies.php [L,QSA]';
     $lines[] = '';
     $lines[] = '# API endpoints without .php';
@@ -30,12 +33,12 @@ function generateHtaccessContent(string $basePath = ''): string
     $lines[] = '# Sitemap XML -> PHP';
     $lines[] = 'RewriteRule ^sitemap-tv-channels\\.xml$ sitemap-tv-channels.php [L,QSA]';
     $lines[] = '';
-    $lines[] = '# Pass through real files and directories (except handled routes above)';
+    $lines[] = '# Pass through real files and directories';
     $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f [OR]';
     $lines[] = 'RewriteCond %{REQUEST_FILENAME} -d';
     $lines[] = 'RewriteRule ^ - [L]';
     $lines[] = '';
-    $lines[] = '# Redirect old .php URLs to clean URLs (keeps current install path)';
+    $lines[] = '# Redirect old .php URLs to clean URLs (preserves install path from THE_REQUEST)';
     $lines[] = 'RewriteCond %{THE_REQUEST} \\s/+(.+?)\\.php([?\\s]) [NC]';
     $lines[] = 'RewriteCond %{THE_REQUEST} !/index\\.php[?\\s] [NC]';
     $lines[] = 'RewriteCond %{THE_REQUEST} !/admin/ [NC]';
@@ -73,8 +76,6 @@ function generateHtaccessContent(string $basePath = ''): string
     $lines[] = 'RewriteCond %{REQUEST_FILENAME} !-d';
     $lines[] = "RewriteRule ^({$cleanPages})/?$ \$1.php [L,QSA]";
     $lines[] = '';
-    $lines[] = 'Options -Indexes';
-    $lines[] = '';
     $lines[] = '<FilesMatch "\\.(sql|md|log)$">';
     $lines[] = '    Require all denied';
     $lines[] = '</FilesMatch>';
@@ -95,7 +96,7 @@ function syncHtaccess(string $basePath): void
 
     $htaccessPath = dirname(__DIR__) . '/.htaccess';
     $expectedMarker = '# APP_BASE: ' . $basePath;
-    $portableMarker = '# Path-agnostic rules:';
+    $portableMarker = '# UNIVERSAL Apache config';
     $current = is_file($htaccessPath) ? (string) file_get_contents($htaccessPath) : '';
 
     if (strpos($current, $expectedMarker) !== false && strpos($current, $portableMarker) !== false) {
