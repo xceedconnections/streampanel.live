@@ -4,6 +4,7 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
 require_once __DIR__ . '/includes/movie_helpers.php';
+require_once __DIR__ . '/includes/cast_helpers.php';
 
 $page_title = "Search Results";
 $conn = getDBConnection();
@@ -105,6 +106,7 @@ $country_filter = $_GET['country'] ?? '';
 
 $results = [
     'movies' => [],
+    'actors' => [],
     'tv_shows' => [],
     'live_tv' => []
 ];
@@ -115,32 +117,10 @@ if (!empty($search_query)) {
     $normalized_search = strtolower($search_query);
     $search_param = "%$normalized_search%";
     
-    // Search Movies
+    // Search Movies (title, description, cast)
     if (empty($type_filter) || $type_filter === 'movie') {
-        $movie_query = "SELECT m.*, c.name as category_name, c.slug as category_slug 
-                        FROM movies m 
-                        LEFT JOIN categories c ON m.category_id = c.id 
-                        WHERE m.is_active = 1 AND (
-                            LOWER(m.title) LIKE ? OR 
-                            LOWER(m.description) LIKE ?
-                        )";
-        $movie_params = [$search_param, $search_param];
-        $movie_types = 'ss';
-        
-        if ($category_filter) {
-            $movie_query .= " AND c.slug = ?";
-            $movie_params[] = $category_filter;
-            $movie_types .= 's';
-        }
-        
-        $movie_query .= " ORDER BY m.featured DESC, m.views DESC LIMIT 50";
-        
-        $stmt = $conn->prepare($movie_query);
-        if (!empty($movie_params)) {
-            $stmt->bind_param($movie_types, ...$movie_params);
-        }
-        $stmt->execute();
-        $results['movies'] = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $results['movies'] = searchMoviesWithCast($conn, $search_query, 50, $category_filter ?: null);
+        $results['actors'] = searchActors($conn, $search_query, 30);
     }
     
     // Search TV Shows
@@ -227,7 +207,7 @@ if (!isLoggedIn()) {
     }
 }
 
-$total_results = count($results['movies']) + count($results['tv_shows']) + count($results['live_tv']);
+$total_results = count($results['movies']) + count($results['actors']) + count($results['tv_shows']) + count($results['live_tv']);
 
 include 'includes/header.php';
 ?>
@@ -372,6 +352,17 @@ include 'includes/header.php';
 .search-result-meta {
     font-size: 0.75rem;
     color: #9ca3af;
+}
+.search-result-poster.actor {
+    padding-top: 100%;
+}
+.search-result-poster.actor img {
+    object-fit: cover;
+    border-radius: 50%;
+    width: 70%;
+    height: 70%;
+    top: 15%;
+    left: 15%;
 }
 .search-section-title {
     font-size: 1.5rem;
@@ -543,7 +534,7 @@ include 'includes/header.php';
         <?php if (!empty($search_query)): ?>
         <p class="text-gray-400">Found <?php echo $total_results; ?> result(s) for "<strong><?php echo htmlspecialchars($search_query); ?></strong>"</p>
         <?php else: ?>
-        <p class="text-gray-400">Enter a search term to find movies, TV shows, and live TV channels</p>
+        <p class="text-gray-400">Enter a search term to find movies, actors, TV shows, and live TV channels</p>
         <?php endif; ?>
     </div>
     
@@ -579,6 +570,37 @@ include 'includes/header.php';
                     </div>
                 </div>
             </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+    
+    <!-- Actors Results -->
+    <?php if (!empty($results['actors'])): ?>
+    <div class="search-results-section">
+        <h2 class="search-section-title">
+            <i class="fas fa-user text-netflix-red"></i>
+            Actors & Actresses (<?php echo count($results['actors']); ?>)
+        </h2>
+        <div class="search-results-grid">
+            <?php foreach ($results['actors'] as $actor): ?>
+            <a href="<?php echo htmlspecialchars($actor['url']); ?>" class="search-result-card">
+                <div class="search-result-poster actor">
+                    <?php if (!empty($actor['profile_url'])): ?>
+                    <img src="<?php echo htmlspecialchars($actor['profile_url']); ?>"
+                         alt="<?php echo htmlspecialchars($actor['name']); ?>"
+                         onerror="this.style.display='none'">
+                    <?php else: ?>
+                    <div class="w-full h-full flex items-center justify-center text-gray-500 absolute inset-0">
+                        <i class="fas fa-user text-4xl"></i>
+                    </div>
+                    <?php endif; ?>
+                    <div class="search-result-info">
+                        <div class="search-result-title"><?php echo htmlspecialchars($actor['name']); ?></div>
+                        <div class="search-result-meta">Actor / Actress</div>
+                    </div>
+                </div>
+            </a>
             <?php endforeach; ?>
         </div>
     </div>

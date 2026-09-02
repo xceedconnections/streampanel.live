@@ -32,6 +32,10 @@ function generateHtaccessContent(string $basePath): string
     $lines[] = 'RewriteCond %{REQUEST_FILENAME} !-f';
     $lines[] = 'RewriteRule ^movies/api/viewer_tracker$ movies/api/viewer_tracker.php [L,QSA]';
     $lines[] = '';
+    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/api/search-suggest(\\?.*)?\$ [NC]";
+    $lines[] = 'RewriteCond %{REQUEST_FILENAME} !-f';
+    $lines[] = 'RewriteRule ^api/search-suggest$ api/search-suggest.php [L,QSA]';
+    $lines[] = '';
     $lines[] = '# Allow API endpoints with .php extension to work directly';
     $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/tv/api/.*\\.php [NC]";
     $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
@@ -42,6 +46,10 @@ function generateHtaccessContent(string $basePath): string
     $lines[] = 'RewriteRule ^ - [L]';
     $lines[] = '';
     $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/movies/api/.*\\.php [NC]";
+    $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
+    $lines[] = 'RewriteRule ^ - [L]';
+    $lines[] = '';
+    $lines[] = "RewriteCond %{REQUEST_URI} ^{$uri}/api/.*\\.php [NC]";
     $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
     $lines[] = 'RewriteRule ^ - [L]';
     $lines[] = '';
@@ -111,6 +119,9 @@ function generateHtaccessContent(string $basePath): string
     $lines[] = '';
     $lines[] = '# Movie listing page (must be before slug routes — movies/ folder exists on disk)';
     $lines[] = 'RewriteRule ^movies/?$ movies.php [L,QSA]';
+    $lines[] = '';
+    $lines[] = '# Actor profile pages: /actors/{slug}';
+    $lines[] = 'RewriteRule ^actors/([a-z0-9-]+)/?$ actor.php?slug=$1 [L,QSA]';
     $lines[] = '';
     $lines[] = '# Movie pages: /movies/{slug} and /movies/{slug}/watch';
     $lines[] = 'RewriteRule ^movies/([a-z0-9-]+)/watch/?$ movies/movie-watch.php?slug=$1 [L,QSA]';

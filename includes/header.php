@@ -293,7 +293,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
             </div>
             <form method="GET" action="<?php echo BASE_URL; ?>/search" class="mb-6">
                 <div class="relative">
-                    <input type="text" name="q" id="search-input" placeholder="Search movies, TV shows, channels..." 
+                    <input type="text" name="q" id="search-input" placeholder="Search movies, actors, TV shows, channels..." 
                            class="w-full bg-gray-900 border-2 border-gray-700 rounded-lg px-6 py-4 text-white text-lg focus:border-netflix-red focus:outline-none"
                            autocomplete="off">
                     <button type="submit" class="absolute right-2 top-2 bg-netflix-red hover:bg-red-700 px-6 py-2 rounded-lg">
@@ -337,6 +337,15 @@ $current_page = basename($_SERVER['PHP_SELF']);
             if (!modal.classList.contains('hidden')) {
                 modal.classList.add('hidden');
             }
+        }
+    });
+    </script>
+    <?php include __DIR__ . '/search-suggest.js.php'; ?>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const searchInput = document.getElementById('search-input');
+        if (searchInput && typeof initSearchSuggest === 'function') {
+            initSearchSuggest(searchInput, { scope: 'all' });
         }
     });
     </script>

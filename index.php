@@ -101,9 +101,23 @@ include 'includes/header.php';
     margin-right: -50vw;
     overflow: hidden;
     background: #000;
+    min-height: 72vh;
+}
+@media (min-width: 768px) {
+    .home-page .hero-carousel {
+        min-height: 82vh;
+    }
+}
+.hero-carousel-track {
+    display: flex;
+    height: 100%;
+    min-height: inherit;
+    transition: transform 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
 }
 .home-page .hero-section {
     position: relative;
+    flex: 0 0 100%;
     width: 100%;
     min-height: 72vh;
     display: flex;
@@ -155,14 +169,44 @@ include 'includes/header.php';
         gap: 1.25rem;
     }
 }
-.hero-carousel {
-    position: relative;
-}
-.hero-slide {
-    display: none;
-}
-.hero-slide.active {
+.hero-carousel-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 20;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.35);
+    background: rgba(0,0,0,0.55);
+    color: #fff;
     display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.2s;
+}
+.hero-carousel-nav:hover {
+    background: rgba(229,9,20,0.9);
+    border-color: #e50914;
+}
+.hero-carousel-nav.prev {
+    left: 1rem;
+}
+.hero-carousel-nav.next {
+    right: 1rem;
+}
+@media (max-width: 640px) {
+    .hero-carousel-nav {
+        width: 36px;
+        height: 36px;
+    }
+    .hero-carousel-nav.prev {
+        left: 0.5rem;
+    }
+    .hero-carousel-nav.next {
+        right: 0.5rem;
+    }
 }
 .hero-carousel-dots {
     position: absolute;
@@ -834,6 +878,7 @@ include 'includes/header.php';
     <!-- Hero Section - cycles through all featured movies -->
     <?php if (!empty($featured_movies)): ?>
         <div class="hero-carousel" id="hero-carousel" data-slide-count="<?php echo count($featured_movies); ?>">
+            <div class="hero-carousel-track" id="hero-carousel-track">
             <?php foreach ($featured_movies as $slideIndex => $heroMovie): ?>
                 <?php
                 $heroImage = htmlspecialchars(movieBackdropUrl($heroMovie));
@@ -844,7 +889,7 @@ include 'includes/header.php';
                     $heroPlayLabel = $heroAccess['reason'] === 'login' ? 'Sign In to Play' : 'Premium Required';
                 }
                 ?>
-                <div class="hero-section hero-slide<?php echo $slideIndex === 0 ? ' active' : ''; ?>" data-hero-index="<?php echo $slideIndex; ?>">
+                <div class="hero-section hero-slide" data-hero-index="<?php echo $slideIndex; ?>">
                     <img src="<?php echo $heroImage; ?>" alt="<?php echo htmlspecialchars($heroMovie['title']); ?>" class="hero-bg-image" onerror="this.style.display='none'">
                     <div class="hero-content">
                         <div class="hero-badge">
@@ -874,7 +919,18 @@ include 'includes/header.php';
                     </div>
                 </div>
             <?php endforeach; ?>
+            </div>
             <?php if (count($featured_movies) > 1): ?>
+                <button type="button" class="hero-carousel-nav prev" id="hero-carousel-prev" aria-label="Previous featured movie">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </button>
+                <button type="button" class="hero-carousel-nav next" id="hero-carousel-next" aria-label="Next featured movie">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
                 <div class="hero-carousel-dots" aria-label="Featured movie slides">
                     <?php foreach ($featured_movies as $dotIndex => $_): ?>
                         <button type="button"
@@ -1137,10 +1193,13 @@ function slideRow(btn, direction) {
 
 (function initHeroCarousel() {
     const carousel = document.getElementById('hero-carousel');
-    if (!carousel) return;
+    const track = document.getElementById('hero-carousel-track');
+    if (!carousel || !track) return;
 
     const slides = carousel.querySelectorAll('.hero-slide');
     const dots = carousel.querySelectorAll('.hero-carousel-dot');
+    const prevBtn = document.getElementById('hero-carousel-prev');
+    const nextBtn = document.getElementById('hero-carousel-next');
     if (slides.length <= 1) return;
 
     let currentIndex = 0;
@@ -1149,12 +1208,16 @@ function slideRow(btn, direction) {
 
     function showSlide(index) {
         currentIndex = (index + slides.length) % slides.length;
-        slides.forEach((slide, i) => slide.classList.toggle('active', i === currentIndex));
+        track.style.transform = 'translateX(-' + (currentIndex * 100) + '%)';
         dots.forEach((dot, i) => dot.classList.toggle('active', i === currentIndex));
     }
 
     function nextSlide() {
         showSlide(currentIndex + 1);
+    }
+
+    function prevSlide() {
+        showSlide(currentIndex - 1);
     }
 
     function startAutoRotate() {
@@ -1169,9 +1232,38 @@ function slideRow(btn, direction) {
         });
     });
 
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            prevSlide();
+            startAutoRotate();
+        });
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            nextSlide();
+            startAutoRotate();
+        });
+    }
+
+    let touchStartX = 0;
+    carousel.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+    carousel.addEventListener('touchend', (e) => {
+        const touchEndX = e.changedTouches[0].screenX;
+        const diff = touchEndX - touchStartX;
+        if (Math.abs(diff) > 50) {
+            if (diff < 0) nextSlide();
+            else prevSlide();
+            startAutoRotate();
+        }
+    }, { passive: true });
+
     carousel.addEventListener('mouseenter', () => clearInterval(timer));
     carousel.addEventListener('mouseleave', startAutoRotate);
 
+    showSlide(0);
     startAutoRotate();
 })();
 </script>

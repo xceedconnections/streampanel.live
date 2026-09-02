@@ -4,6 +4,7 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
 require_once __DIR__ . '/includes/movie_helpers.php';
+require_once __DIR__ . '/includes/cast_helpers.php';
 
 $page_title = "Movie Details";
 $conn = getDBConnection();
@@ -237,6 +238,13 @@ include 'includes/header.php';
 }
 .cast-card {
     text-align: center;
+    display: block;
+    color: inherit;
+    text-decoration: none;
+}
+.cast-card:hover {
+    color: inherit;
+    text-decoration: none;
 }
 .cast-card img {
     width: 100%;
@@ -469,7 +477,8 @@ include 'includes/header.php';
         <h2>Cast</h2>
         <div class="cast-grid">
             <?php foreach ($cast as $actor): ?>
-            <div class="cast-card">
+            <?php $actorUrl = getActorProfileUrl($actor['name'] ?? ''); ?>
+            <a href="<?php echo htmlspecialchars($actorUrl); ?>" class="cast-card">
                 <?php
                 $profile = !empty($actor['profile_path'])
                     ? tmdbImageUrl($actor['profile_path'], 'w185')
@@ -480,7 +489,7 @@ include 'includes/header.php';
                 <?php if (!empty($actor['character'])): ?>
                 <div class="role"><?php echo htmlspecialchars($actor['character']); ?></div>
                 <?php endif; ?>
-            </div>
+            </a>
             <?php endforeach; ?>
         </div>
     </div>

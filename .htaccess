@@ -16,6 +16,10 @@ RewriteCond %{REQUEST_URI} ^/stream/movies/api/viewer_tracker(\?.*)?$ [NC]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^movies/api/viewer_tracker$ movies/api/viewer_tracker.php [L,QSA]
 
+RewriteCond %{REQUEST_URI} ^/stream/api/search-suggest(\?.*)?$ [NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^api/search-suggest$ api/search-suggest.php [L,QSA]
+
 # Allow API endpoints with .php extension to work directly
 RewriteCond %{REQUEST_URI} ^/stream/tv/api/.*\.php [NC]
 RewriteCond %{REQUEST_FILENAME} -f
@@ -26,6 +30,10 @@ RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^ - [L]
 
 RewriteCond %{REQUEST_URI} ^/stream/movies/api/.*\.php [NC]
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+RewriteCond %{REQUEST_URI} ^/stream/api/.*\.php [NC]
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^ - [L]
 
@@ -105,6 +113,9 @@ RewriteRule ^countdown/([a-z0-9-]+)/?$ countdown.php?slug=$1 [L,QSA]
 
 # Movie listing page (must be before slug routes — movies/ folder exists on disk)
 RewriteRule ^movies/?$ movies.php [L,QSA]
+
+# Actor profile pages: /actors/{slug}
+RewriteRule ^actors/([a-z0-9-]+)/?$ actor.php?slug=$1 [L,QSA]
 
 # Movie pages: /movies/{slug} and /movies/{slug}/watch
 RewriteRule ^movies/([a-z0-9-]+)/watch/?$ movies/movie-watch.php?slug=$1 [L,QSA]
