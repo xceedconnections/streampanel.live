@@ -18,6 +18,7 @@ html {
     padding: 0;
     width: 100%;
     max-width: 100%;
+    background: #000;
 }
 body {
     margin: 0;
@@ -25,8 +26,9 @@ body {
     width: 100%;
     max-width: 100%;
     overscroll-behavior-y: none;
+    background: #000;
 }
-/* Hidden by default — desktop and tablet landscape */
+/* Hidden by default — desktop */
 .mobile-footer-nav {
     display: none !important;
     visibility: hidden !important;
@@ -59,7 +61,7 @@ body {
         width: 100% !important;
         max-width: 100% !important;
         margin: 0 !important;
-        padding: 0.35rem 0 var(--mobile-nav-safe-bottom) !important;
+        padding: 0.35rem 0 0 !important;
         background: rgba(20, 20, 20, 0.98);
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
@@ -68,9 +70,8 @@ body {
         justify-content: space-around;
         align-items: center;
         z-index: 2147483000 !important;
-        height: var(--mobile-nav-total-height);
-        min-height: var(--mobile-nav-total-height);
-        max-height: var(--mobile-nav-total-height);
+        min-height: var(--mobile-nav-height);
+        box-sizing: border-box;
         box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
         transform: none !important;
         -webkit-transform: none !important;
