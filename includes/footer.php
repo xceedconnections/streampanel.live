@@ -38,7 +38,7 @@
 
     if (empty($isAndroidTV)) {
         echo '<style id="mobile-footer-nav-critical">';
-        echo '@media (max-width:767px){#mobile-footer-nav{position:fixed!important;left:0!important;right:0!important;bottom:0!important;z-index:99999!important;display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;background:#141414!important;}}';
+        echo '@media (max-width:767px){#mobile-footer-nav-shell{position:fixed!important;left:0!important;right:0!important;bottom:0!important;z-index:99999!important;width:100%!important;}#mobile-footer-nav-shell #mobile-footer-nav{display:flex!important;visibility:visible!important;opacity:1!important;background:#141414!important;}}';
         echo '</style>';
     }
     ?>
