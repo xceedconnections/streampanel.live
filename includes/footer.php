@@ -26,9 +26,19 @@
         $site_name = 'StreamPanel';
     }
 
+    if (!isset($isAndroidTV)) {
+        $isAndroidTV = isset($_SERVER['HTTP_USER_AGENT']) && preg_match('/(Android TV|AFT|BRAVIA|MiTV|SmartTV|GoogleTV|Tizen|Web0S|HbbTV)/i', $_SERVER['HTTP_USER_AGENT']);
+    }
+
     if (empty($mobile_footer_nav_styles_included)) {
-        echo '<style>';
+        echo '<style id="mobile-footer-nav-styles">';
         include __DIR__ . '/mobile-footer-nav-styles.php';
+        echo '</style>';
+    }
+
+    if (empty($isAndroidTV)) {
+        echo '<style id="mobile-footer-nav-critical">';
+        echo '@media (max-width:767px){#mobile-footer-nav{position:fixed!important;left:0!important;right:0!important;bottom:0!important;z-index:99999!important;display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;background:#141414!important;}}';
         echo '</style>';
     }
     ?>
@@ -73,9 +83,10 @@
     <?php endif; ?>
 
     <?php
-    if (empty($mobile_footer_nav_rendered)) {
-        include __DIR__ . '/mobile-footer-nav.php';
+    if (empty($mobile_nav_path)) {
+        $mobile_nav_path = $_SERVER['REQUEST_URI'] ?? '';
     }
+    include __DIR__ . '/mobile-footer-nav.php';
     include __DIR__ . '/mobile-footer-nav-pin.php';
     ?>
 </body>

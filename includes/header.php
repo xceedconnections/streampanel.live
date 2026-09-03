@@ -166,15 +166,9 @@ $current_page = basename($_SERVER['PHP_SELF']);
             background-color: rgba(0, 0, 0, 0.7);
             backdrop-filter: blur(10px);
         }
-        
-        <?php include __DIR__ . '/mobile-footer-nav-styles.php'; ?>
     </style>
 </head>
 <body class="bg-black text-white">
-    <?php
-    $mobile_nav_path = $_SERVER['REQUEST_URI'] ?? '';
-    include __DIR__ . '/mobile-footer-nav.php';
-    ?>
     <nav class="fixed top-0 left-0 right-0 z-50 navbar-blur">
         <div class="container mx-auto px-4 py-3 flex items-center justify-between">
             <div class="flex items-center space-x-8">

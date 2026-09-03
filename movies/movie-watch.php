@@ -142,10 +142,8 @@ $mobile_nav_path = $_SERVER['REQUEST_URI'] ?? '';
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style><?php include __DIR__ . '/../includes/watch-player-layout-styles.php'; ?></style>
-    <style><?php include __DIR__ . '/../includes/mobile-footer-nav-styles.php'; ?></style>
 </head>
 <body class="bg-black text-white">
-<?php include __DIR__ . '/../includes/mobile-footer-nav.php'; ?>
 
 <?php if ($error || !$movie): ?>
     <div class="error-page">

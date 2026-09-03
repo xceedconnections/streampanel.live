@@ -102,12 +102,147 @@ function ensureSliderAdminSchema($conn)
             }
         }
 
+        sliderAdminRelaxLegacyColumns($conn);
+
         $done = true;
         return true;
     } catch (Exception $e) {
         error_log('Slider schema update error: ' . $e->getMessage());
         return false;
     }
+}
+
+/**
+ * Older installs stored slide data on sliders (image_url, link_*, etc.).
+ * Relax NOT NULL columns so new multi-slide inserts do not fail.
+ */
+function sliderAdminRelaxLegacyColumns($conn)
+{
+    if (!sliderAdminTableExists($conn, 'sliders')) {
+        return;
+    }
+
+    $fixes = [
+        "ALTER TABLE sliders MODIFY COLUMN title VARCHAR(255) NOT NULL DEFAULT ''",
+        "ALTER TABLE sliders MODIFY COLUMN image_url VARCHAR(500) NOT NULL DEFAULT ''",
+        "ALTER TABLE sliders MODIFY COLUMN description TEXT NULL",
+        "ALTER TABLE sliders MODIFY COLUMN link_url VARCHAR(500) NULL DEFAULT NULL",
+    ];
+
+    foreach ($fixes as $sql) {
+        @$conn->query($sql);
+    }
+}
+
+function sliderAdminSliderInsertColumns($conn)
+{
+    $columns = [
+        'title',
+        'display_order',
+        'is_active',
+        'display_on_home',
+        'display_on_movies',
+        'display_on_tv_shows',
+        'display_on_live_tv',
+        'auto_rotate',
+        'rotate_interval',
+    ];
+
+    if (sliderAdminColumnExists($conn, 'sliders', 'image_url')) {
+        $columns[] = 'image_url';
+    }
+    if (sliderAdminColumnExists($conn, 'sliders', 'description')) {
+        $columns[] = 'description';
+    }
+    if (sliderAdminColumnExists($conn, 'sliders', 'link_url')) {
+        $columns[] = 'link_url';
+    }
+    if (sliderAdminColumnExists($conn, 'sliders', 'link_type')) {
+        $columns[] = 'link_type';
+    }
+    if (sliderAdminColumnExists($conn, 'sliders', 'link_id')) {
+        $columns[] = 'link_id';
+    }
+
+    return $columns;
+}
+
+function sliderAdminBindType($value)
+{
+    return is_int($value) ? 'i' : 's';
+}
+
+function sliderAdminSaveSlider($conn, array $data)
+{
+    sliderAdminRelaxLegacyColumns($conn);
+
+    $id = !empty($data['id']) ? (int) $data['id'] : null;
+    $values = [
+        'title' => (string) ($data['title'] ?? ''),
+        'display_order' => (int) ($data['display_order'] ?? 0),
+        'is_active' => (int) ($data['is_active'] ?? 0),
+        'display_on_home' => (int) ($data['display_on_home'] ?? 0),
+        'display_on_movies' => (int) ($data['display_on_movies'] ?? 0),
+        'display_on_tv_shows' => (int) ($data['display_on_tv_shows'] ?? 0),
+        'display_on_live_tv' => (int) ($data['display_on_live_tv'] ?? 0),
+        'auto_rotate' => (int) ($data['auto_rotate'] ?? 0),
+        'rotate_interval' => (int) ($data['rotate_interval'] ?? 5000),
+        'image_url' => (string) ($data['image_url'] ?? ''),
+        'description' => (string) ($data['description'] ?? ''),
+        'link_url' => $data['link_url'] ?? null,
+        'link_type' => (string) ($data['link_type'] ?? 'external'),
+        'link_id' => isset($data['link_id']) ? (int) $data['link_id'] : null,
+    ];
+
+    $columns = sliderAdminSliderInsertColumns($conn);
+
+    if ($id) {
+        $sets = [];
+        $types = '';
+        $bindValues = [];
+        foreach ($columns as $column) {
+            $sets[] = $column . '=?';
+            $types .= sliderAdminBindType($values[$column]);
+            $bindValues[] = $values[$column];
+        }
+        $types .= 'i';
+        $bindValues[] = $id;
+
+        $sql = 'UPDATE sliders SET ' . implode(', ', $sets) . ' WHERE id=?';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new RuntimeException('Database error: ' . $conn->error);
+        }
+        $stmt->bind_param($types, ...$bindValues);
+        $stmt->execute();
+        return $id;
+    }
+
+    $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+    $sql = 'INSERT INTO sliders (' . implode(', ', $columns) . ') VALUES (' . $placeholders . ')';
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Database error: ' . $conn->error);
+    }
+
+    $types = '';
+    $bindValues = [];
+    foreach ($columns as $column) {
+        $types .= sliderAdminBindType($values[$column]);
+        $bindValues[] = $values[$column];
+    }
+    $stmt->bind_param($types, ...$bindValues);
+    $stmt->execute();
+
+    return (int) $conn->insert_id;
+}
+
+function sliderAdminHandleFailure($e)
+{
+    $message = ($e instanceof Throwable) ? $e->getMessage() : (string) $e;
+    error_log('Slider admin request error: ' . $message);
+    sliderAdminFlash('error', 'Slider error: ' . $message);
+    sliderAdminRedirect('?tab=sliders');
 }
 
 function sliderAdminFlash($type, $message)
@@ -132,117 +267,98 @@ function sliderAdminRedirect($location)
 
 function processSliderAdminRequests($conn)
 {
-    ensureSliderAdminSchema($conn);
+    try {
+        ensureSliderAdminSchema($conn);
 
-    if (isset($_GET['delete_slider'])) {
-        $id = (int) $_GET['delete_slider'];
-        $stmt = $conn->prepare('DELETE FROM sliders WHERE id = ?');
-        if ($stmt) {
-            $stmt->bind_param('i', $id);
-            $stmt->execute();
-        }
-        sliderAdminRedirect('?tab=sliders');
-    }
-
-    if (isset($_GET['delete_slide'])) {
-        $id = (int) $_GET['delete_slide'];
-        $sliderId = (int) ($_GET['slider_id'] ?? 0);
-        $stmt = $conn->prepare('DELETE FROM slider_slides WHERE id = ?');
-        if ($stmt) {
-            $stmt->bind_param('i', $id);
-            $stmt->execute();
-        }
-        sliderAdminRedirect('?tab=sliders' . ($sliderId > 0 ? '&slider_id=' . $sliderId : ''));
-    }
-
-    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['reorder_slides'])) {
-        $sliderId = (int) ($_POST['slider_id'] ?? 0);
-        $wantsJson = !empty($_POST['ajax'])
-            || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
-
-        $orderIds = [];
-        if (!empty($_POST['slide_order']) && is_array($_POST['slide_order'])) {
-            $orderIds = array_map('intval', $_POST['slide_order']);
-        } elseif (!empty($_POST['slide_priorities']) && is_array($_POST['slide_priorities'])) {
-            $priorities = [];
-            foreach ($_POST['slide_priorities'] as $sid => $prio) {
-                $priorities[(int) $sid] = (int) $prio;
-            }
-            asort($priorities, SORT_NUMERIC);
-            $orderIds = array_keys($priorities);
-        }
-
-        if ($sliderId > 0 && !empty($orderIds)) {
-            $stmt = $conn->prepare('UPDATE slider_slides SET display_order = ? WHERE id = ? AND slider_id = ?');
+        if (isset($_GET['delete_slider'])) {
+            $id = (int) $_GET['delete_slider'];
+            $stmt = $conn->prepare('DELETE FROM sliders WHERE id = ?');
             if ($stmt) {
-                $pos = 1;
-                foreach ($orderIds as $slideId) {
-                    if ($slideId <= 0) {
-                        continue;
+                $stmt->bind_param('i', $id);
+                $stmt->execute();
+            }
+            sliderAdminRedirect('?tab=sliders');
+        }
+
+        if (isset($_GET['delete_slide'])) {
+            $id = (int) $_GET['delete_slide'];
+            $sliderId = (int) ($_GET['slider_id'] ?? 0);
+            $stmt = $conn->prepare('DELETE FROM slider_slides WHERE id = ?');
+            if ($stmt) {
+                $stmt->bind_param('i', $id);
+                $stmt->execute();
+            }
+            sliderAdminRedirect('?tab=sliders' . ($sliderId > 0 ? '&slider_id=' . $sliderId : ''));
+        }
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['reorder_slides'])) {
+            $sliderId = (int) ($_POST['slider_id'] ?? 0);
+            $wantsJson = !empty($_POST['ajax'])
+                || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
+
+            $orderIds = [];
+            if (!empty($_POST['slide_order']) && is_array($_POST['slide_order'])) {
+                $orderIds = array_map('intval', $_POST['slide_order']);
+            } elseif (!empty($_POST['slide_priorities']) && is_array($_POST['slide_priorities'])) {
+                $priorities = [];
+                foreach ($_POST['slide_priorities'] as $sid => $prio) {
+                    $priorities[(int) $sid] = (int) $prio;
+                }
+                asort($priorities, SORT_NUMERIC);
+                $orderIds = array_keys($priorities);
+            }
+
+            if ($sliderId > 0 && !empty($orderIds)) {
+                $stmt = $conn->prepare('UPDATE slider_slides SET display_order = ? WHERE id = ? AND slider_id = ?');
+                if ($stmt) {
+                    $pos = 1;
+                    foreach ($orderIds as $slideId) {
+                        if ($slideId <= 0) {
+                            continue;
+                        }
+                        $stmt->bind_param('iii', $pos, $slideId, $sliderId);
+                        $stmt->execute();
+                        $pos++;
                     }
-                    $stmt->bind_param('iii', $pos, $slideId, $sliderId);
-                    $stmt->execute();
-                    $pos++;
                 }
             }
-        }
 
-        if ($wantsJson) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => true, 'count' => count($orderIds)]);
-            exit;
-        }
-
-        sliderAdminRedirect('?tab=sliders&slider_id=' . $sliderId . '&reordered=1');
-    }
-
-    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_slider'])) {
-        $id = !empty($_POST['id']) ? (int) $_POST['id'] : null;
-        $title = sanitize($_POST['title'] ?? '');
-        $display_order = (int) ($_POST['display_order'] ?? 0);
-        $is_active = isset($_POST['is_active']) ? 1 : 0;
-        $display_on_home = isset($_POST['display_on_home']) ? 1 : 0;
-        $display_on_movies = isset($_POST['display_on_movies']) ? 1 : 0;
-        $display_on_tv_shows = isset($_POST['display_on_tv_shows']) ? 1 : 0;
-        $display_on_live_tv = isset($_POST['display_on_live_tv']) ? 1 : 0;
-        $auto_rotate = isset($_POST['auto_rotate']) ? 1 : 0;
-        $rotate_interval = (int) ($_POST['rotate_interval'] ?? 5000);
-
-        if ($title === '') {
-            sliderAdminFlash('error', 'Slider name is required.');
-            sliderAdminRedirect('?tab=sliders');
-        }
-
-        if ($id) {
-            $stmt = $conn->prepare('UPDATE sliders SET title=?, display_order=?, is_active=?, display_on_home=?, display_on_movies=?, display_on_tv_shows=?, display_on_live_tv=?, auto_rotate=?, rotate_interval=? WHERE id=?');
-            if (!$stmt) {
-                sliderAdminFlash('error', 'Database error: ' . $conn->error);
-                sliderAdminRedirect('?tab=sliders&edit_slider=' . $id);
+            if ($wantsJson) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => true, 'count' => count($orderIds)]);
+                exit;
             }
-            $stmt->bind_param('siiiiiiiii', $title, $display_order, $is_active, $display_on_home, $display_on_movies, $display_on_tv_shows, $display_on_live_tv, $auto_rotate, $rotate_interval, $id);
-            $ok = $stmt->execute();
-            $redirectId = $id;
-        } else {
-            $stmt = $conn->prepare('INSERT INTO sliders (title, display_order, is_active, display_on_home, display_on_movies, display_on_tv_shows, display_on_live_tv, auto_rotate, rotate_interval) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            if (!$stmt) {
-                sliderAdminFlash('error', 'Database error: ' . $conn->error);
+
+            sliderAdminRedirect('?tab=sliders&slider_id=' . $sliderId . '&reordered=1');
+        }
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_slider'])) {
+            $id = !empty($_POST['id']) ? (int) $_POST['id'] : null;
+            $title = sanitize($_POST['title'] ?? '');
+
+            if ($title === '') {
+                sliderAdminFlash('error', 'Slider name is required.');
                 sliderAdminRedirect('?tab=sliders');
             }
-            $stmt->bind_param('siiiiiiii', $title, $display_order, $is_active, $display_on_home, $display_on_movies, $display_on_tv_shows, $display_on_live_tv, $auto_rotate, $rotate_interval);
-            $ok = $stmt->execute();
-            $redirectId = (int) $conn->insert_id;
+
+            $redirectId = sliderAdminSaveSlider($conn, [
+                'id' => $id,
+                'title' => $title,
+                'display_order' => (int) ($_POST['display_order'] ?? 0),
+                'is_active' => isset($_POST['is_active']) ? 1 : 0,
+                'display_on_home' => isset($_POST['display_on_home']) ? 1 : 0,
+                'display_on_movies' => isset($_POST['display_on_movies']) ? 1 : 0,
+                'display_on_tv_shows' => isset($_POST['display_on_tv_shows']) ? 1 : 0,
+                'display_on_live_tv' => isset($_POST['display_on_live_tv']) ? 1 : 0,
+                'auto_rotate' => isset($_POST['auto_rotate']) ? 1 : 0,
+                'rotate_interval' => (int) ($_POST['rotate_interval'] ?? 5000),
+            ]);
+
+            sliderAdminFlash('success', $id ? 'Slider updated successfully' : 'Slider added successfully');
+            sliderAdminRedirect('?tab=sliders&slider_id=' . $redirectId);
         }
 
-        if (!$ok) {
-            sliderAdminFlash('error', 'Failed to save slider: ' . ($stmt->error ?: $conn->error));
-            sliderAdminRedirect('?tab=sliders');
-        }
-
-        sliderAdminFlash('success', $id ? 'Slider updated successfully' : 'Slider added successfully');
-        sliderAdminRedirect('?tab=sliders&slider_id=' . $redirectId);
-    }
-
-    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_slide'])) {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save_slide'])) {
         $id = !empty($_POST['slide_id']) ? (int) $_POST['slide_id'] : null;
         $slider_id = (int) ($_POST['slider_id'] ?? 0);
         $title = sanitize($_POST['slide_title'] ?? '');
@@ -261,7 +377,7 @@ function processSliderAdminRequests($conn)
         }
 
         if (isset($_FILES['slide_image_file']) && $_FILES['slide_image_file']['error'] === UPLOAD_ERR_OK) {
-            $upload_dir = dirname(__DIR__) . '/uploads/sliders/';
+            $upload_dir = dirname(__DIR__, 2) . '/uploads/sliders/';
             if (!is_dir($upload_dir)) {
                 mkdir($upload_dir, 0755, true);
             }
@@ -403,6 +519,9 @@ function processSliderAdminRequests($conn)
         }
 
         sliderAdminRedirect('?tab=sliders&slider_id=' . $slider_id);
+        }
+    } catch (Throwable $e) {
+        sliderAdminHandleFailure($e);
     }
 }
 

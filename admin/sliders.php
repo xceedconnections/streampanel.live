@@ -18,7 +18,7 @@ $edit_slide = null;
 $movies = [];
 $tv_shows = [];
 $live_tv_channels = [];
-$slider_form_action = 'index.php?tab=sliders';
+$slider_form_action = '?tab=sliders';
 
 try {
     if (!ensureSliderAdminSchema($conn)) {

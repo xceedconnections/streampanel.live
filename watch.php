@@ -515,13 +515,9 @@ include 'includes/header.php';
         .bg-netflix-red {
             background-color: #e50914;
         }
-        
-        /* Mobile Footer Navigation */
-        <?php include __DIR__ . '/includes/mobile-footer-nav-styles.php'; ?>
     </style>
 </head>
 <body>
-<?php include __DIR__ . '/includes/mobile-footer-nav.php'; ?>
     <?php
 }
 
@@ -541,7 +537,6 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
     background: #000;
     color: #fff;
     font-family: system-ui, -apple-system, sans-serif;
-    padding-bottom: 60px; /* Add bottom padding for mobile footer navigation */
 }
 @media (min-width: 768px) {
     .watch-page {

@@ -442,7 +442,6 @@ if ($channel) {
     background: #000;
     color: #fff;
     font-family: system-ui, -apple-system, sans-serif;
-    padding-bottom: 60px; /* Add bottom padding for mobile footer navigation */
 }
 @media (min-width: 768px) {
     .tv-channel-page {
@@ -1675,10 +1674,8 @@ if ($channel) {
     border-color: rgba(255, 255, 255, 0.3);
 }
     </style>
-    <style><?php include __DIR__ . '/../includes/mobile-footer-nav-styles.php'; ?></style>
 </head>
 <body class="bg-black text-white">
-<?php include __DIR__ . '/../includes/mobile-footer-nav.php'; ?>
 
 <?php if ($error || !$channel): ?>
     <div class="error-page">
