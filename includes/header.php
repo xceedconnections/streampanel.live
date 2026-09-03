@@ -65,13 +65,20 @@ if (isset($_SESSION['user_id'])) {
 $current_page = basename($_SERVER['PHP_SELF']);
 require_once __DIR__ . '/seo.php';
 
+$stream_smart_tv_ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+$is_smart_tv = (bool) preg_match('/SmartTV|SMART-TV|Smart-TV|Tizen|Web0S|WebOS|BRAVIA|TV Safari|AppleTV|Android TV|AFT[A-Z]|HbbTV|Viera|NetCast|Hisense|VIDAA|PhilipsTV|\bTCL\b|Roku|CrKey|GoogleTV|MiBOX|MIBOX|MiTV|PlayStation|Xbox|HUAWEI.*TV|SonyDTV|Maple/i', $stream_smart_tv_ua);
+$stream_html_classes = 'has-stream-mobile-nav';
+if ($is_smart_tv) {
+    $stream_html_classes .= ' is-smart-tv';
+}
+
 $seo_document_title = !empty($page_title) ? $page_title : $site_name;
 if (!empty($page_title) && stripos($page_title, $site_name) === false) {
     $seo_document_title = $page_title . ' - ' . $site_name;
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="<?php echo htmlspecialchars($stream_html_classes); ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -138,8 +145,18 @@ if (!empty($page_title) && stripos($page_title, $site_name) === false) {
             backdrop-filter: blur(10px);
         }
     </style>
+    <?php
+    $stream_mobile_nav_mode = 'css';
+    include __DIR__ . '/mobile-nav.php';
+    unset($stream_mobile_nav_mode);
+    ?>
 </head>
-<body class="bg-black text-white has-stream-mobile-nav">
+<body class="bg-black text-white has-stream-mobile-nav<?php echo $is_smart_tv ? ' is-smart-tv' : ''; ?>">
+    <?php
+    $stream_mobile_nav_mode = 'markup';
+    include __DIR__ . '/mobile-nav.php';
+    unset($stream_mobile_nav_mode);
+    ?>
     <?php renderPublicCustomCode($conn, 'custom_code_body'); ?>
     <nav class="fixed top-0 left-0 right-0 z-50 navbar-blur">
         <div class="container mx-auto px-4 py-3 flex items-center justify-between">
