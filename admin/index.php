@@ -29,7 +29,7 @@ if (empty($_GET['tab']) && empty($_POST['tab'])) {
 $tab = $_GET['tab'] ?? $_POST['tab'] ?? 'dashboard';
 $validTabs = [
     'dashboard', 'movies', 'edit-movie', 'tv-shows', 'live-tv', 'edit-channel', 'categories',
-    'users', 'reports', 'user-messages', 'coupons', 'ads', 'sliders', 'settings',
+    'users', 'reports', 'content-reports', 'user-messages', 'coupons', 'ads', 'sliders', 'settings',
     'import', 'iptv', 'links', 'bulk-fetch', 'episodes', 'countdown',
     'tools', 'match-replace', 'import-sql',
     'delete-m3u8-channels', 'delete-no-source-channels', 'delete-dash-channels',
@@ -1198,6 +1198,16 @@ $stats = getAdminStats($conn);
                             </a>
                             <a href="?tab=reports" class="nav-item px-3 py-2 hover:text-gray-300 whitespace-nowrap flex-shrink-0 <?php echo $tab === 'reports' ? 'active font-bold text-netflix-red' : ''; ?>">
                                 <i class="fas fa-chart-bar mr-2"></i>Reports
+                            </a>
+                            <?php
+                            $pending_content_reports = 0;
+                            $pending_reports_q = @$conn->query("SELECT COUNT(*) AS c FROM reports WHERE status = 'pending'");
+                            if ($pending_reports_q) {
+                                $pending_content_reports = (int) ($pending_reports_q->fetch_assoc()['c'] ?? 0);
+                            }
+                            ?>
+                            <a href="?tab=content-reports" class="nav-item px-3 py-2 hover:text-gray-300 whitespace-nowrap flex-shrink-0 <?php echo $tab === 'content-reports' ? 'active font-bold text-netflix-red' : ''; ?>">
+                                <i class="fas fa-unlink mr-2"></i>Broken Links<?php if ($pending_content_reports > 0): ?><span class="ml-1 px-1.5 py-0.5 text-xs rounded bg-netflix-red text-white"><?php echo $pending_content_reports; ?></span><?php endif; ?>
                             </a>
                             <a href="?tab=user-messages" class="nav-item px-3 py-2 hover:text-gray-300 whitespace-nowrap flex-shrink-0 <?php echo $tab === 'user-messages' ? 'active font-bold text-netflix-red' : ''; ?>">
                                 <i class="fas fa-envelope mr-2"></i>Msgs

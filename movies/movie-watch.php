@@ -201,6 +201,11 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                     <h1><?php echo htmlspecialchars($movie_title); ?></h1>
                     <p><?php echo $movie_year > 0 ? $movie_year : 'Movie'; ?><?php echo $movie_category !== '' ? ' | ' . htmlspecialchars($movie_category) : ''; ?></p>
                 </div>
+                <?php if (!$showPremiumGate): ?>
+                <button type="button" class="header-back-btn" onclick="openStreamReportModal()" aria-label="Report" title="Report a problem">
+                    <i class="fas fa-flag"></i>
+                </button>
+                <?php endif; ?>
                 <div class="viewer-count-header" id="viewer-count-mobile">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                     <span id="viewer-count-mobile-text">0</span>
@@ -221,6 +226,11 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                         <h1><?php echo htmlspecialchars($movie_title); ?></h1>
                         <p><?php echo $movie_year > 0 ? $movie_year : 'Movie'; ?><?php echo $movie_category !== '' ? ' | ' . htmlspecialchars($movie_category) : ''; ?></p>
                     </div>
+                    <?php if (!$showPremiumGate): ?>
+                    <button type="button" class="header-back-btn" onclick="openStreamReportModal()" aria-label="Report" title="Report a problem">
+                        <i class="fas fa-flag"></i>
+                    </button>
+                    <?php endif; ?>
                     <div class="viewer-count-header" id="viewer-count-desktop">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                         <span id="viewer-count-desktop-text">0</span>
@@ -277,8 +287,24 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                     <?php endif; ?>
                 <?php endforeach; ?>
             </div>
+            <?php if (!$showPremiumGate): ?>
+            <p class="try-another-source-text" style="margin-top: 0.75rem;">
+                <button type="button" onclick="openStreamReportModal()" style="background:none;border:none;color:#e50914;font-weight:700;cursor:pointer;padding:0;">Report a problem</button>
+            </p>
+            <?php endif; ?>
+        </div>
+        <?php elseif (!$showPremiumGate && $has_valid_sources): ?>
+        <div class="try-another-source-section">
+            <button type="button" onclick="openStreamReportModal()" class="try-source-link">Report a problem</button>
         </div>
         <?php endif; ?>
+
+        <?php
+        $report_content_type = 'movie';
+        $report_content_id = (int) ($movie['id'] ?? 0);
+        $report_source_index = (int) ($current_source_index ?? 0);
+        include __DIR__ . '/../includes/stream-report-markup.php';
+        ?>
 
         <?php if (!empty($movie['description'])): ?>
         <div class="channel-description-section">
@@ -317,6 +343,7 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
     const movieId = <?php echo (int) $movie['id']; ?>;
     const streamUrl = <?php echo json_encode($selected_source['url'] ?? ''); ?>;
     const streamType = <?php echo json_encode(strtolower($selected_source['type'] ?? 'embed')); ?>;
+    let currentSourceIndex = <?php echo (int) $current_source_index; ?>;
     const embedMode = <?php echo json_encode($embedMode['mode']); ?>;
     const viewerApiUrl = <?php echo json_encode(url('movies/api/viewer_tracker')); ?>;
     let hlsInstance = null;
@@ -339,23 +366,27 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
     }
 
     function toggleFullscreen() {
+        if (typeof window.streamToggleFullscreen === 'function') {
+            window.streamToggleFullscreen('player-container');
+            return;
+        }
         const container = document.getElementById('player-container');
         if (!container) return;
-        if (!document.fullscreenElement) {
-            (container.requestFullscreen || container.webkitRequestFullscreen || container.mozRequestFullScreen || container.msRequestFullscreen).call(container);
+        const fs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+        if (!fs) {
+            const req = container.requestFullscreen || container.webkitRequestFullscreen || container.mozRequestFullScreen || container.msRequestFullscreen;
+            if (req) req.call(container);
         } else {
-            (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen).call(document);
+            const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+            if (exit) exit.call(document);
         }
     }
 
     document.addEventListener('fullscreenchange', () => {
-        isFullscreen = !!document.fullscreenElement;
-        const maximizeIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3m-18 0v3a2 2 0 0 0 2 2h3"></path></svg>';
-        const minimizeIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18h3a2 2 0 0 0 2-2v-3m-18 0v3a2 2 0 0 0 2 2h3"></path></svg>';
-        const btnMobile = document.getElementById('fullscreen-button-mobile');
-        const btnDesktop = document.getElementById('fullscreen-button-desktop');
-        if (btnMobile) btnMobile.innerHTML = isFullscreen ? minimizeIcon : maximizeIcon;
-        if (btnDesktop) btnDesktop.innerHTML = isFullscreen ? minimizeIcon : maximizeIcon;
+        isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    });
+    document.addEventListener('webkitfullscreenchange', () => {
+        isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
     });
 
     function updateViewerDisplay(count) {
@@ -379,10 +410,21 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
     function playActualStream() {
         const htmlEmbedContainer = document.getElementById('html-embed-container');
         const embedFrame = document.getElementById('embedFrame');
+        const videoEl = document.getElementById('videoPlayer');
+        const youtubeIframeEl = document.getElementById('youtubePlayer');
         if (embedMode === 'iframe_url' || embedMode === 'embed_proxy') {
-            if (htmlEmbedContainer) htmlEmbedContainer.style.display = 'block';
-            if (embedFrame && !embedFrame.src && embedFrame.getAttribute('data-src')) {
-                embedFrame.src = embedFrame.getAttribute('data-src');
+            if (videoEl) videoEl.style.display = 'none';
+            if (youtubeIframeEl) youtubeIframeEl.style.display = 'none';
+            if (htmlEmbedContainer) {
+                htmlEmbedContainer.style.display = 'block';
+                htmlEmbedContainer.style.width = '100%';
+                htmlEmbedContainer.style.height = '100%';
+            }
+            if (embedFrame) {
+                const nextSrc = embedFrame.getAttribute('data-src') || '';
+                if (nextSrc) {
+                    embedFrame.src = nextSrc;
+                }
             }
             return;
         }
@@ -452,6 +494,8 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
         if (hlsInstance) { try { hlsInstance.destroy(); } catch (e) {} }
     });
     </script>
+    <?php include __DIR__ . '/../includes/player-fullscreen.js.php'; ?>
+    <?php include __DIR__ . '/../includes/player-touch-gestures.js.php'; ?>
 <?php endif; ?>
 
 <?php if ($movie && $footer_heading !== ''): ?>

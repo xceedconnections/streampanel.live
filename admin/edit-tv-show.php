@@ -29,13 +29,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = sanitize($_POST['title'] ?? '');
     $description = sanitize($_POST['description'] ?? '');
     $poster = sanitize($_POST['poster'] ?? '');
+    $thumbnail = sanitize($_POST['thumbnail'] ?? ($show['thumbnail'] ?? ''));
     $release_year = intval($_POST['release_year'] ?? date('Y'));
+    $rating = floatval($_POST['rating'] ?? 0);
+    $tmdb_id = !empty($_POST['tmdb_id']) ? intval($_POST['tmdb_id']) : null;
     $category_id = intval($_POST['category_id'] ?? 0) ?: null;
     $featured = isset($_POST['featured']) ? 1 : 0;
     $is_active = isset($_POST['is_active']) ? 1 : 0;
     $is_free = isset($_POST['is_free']) ? 1 : 0;
     $is_premium = isset($_POST['is_premium']) ? 1 : 0;
-    $thumbnail = ''; // Not used
 
     // Handle poster upload
     if (isset($_FILES['poster_file']) && $_FILES['poster_file']['error'] === UPLOAD_ERR_OK) {
@@ -62,6 +64,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $poster = 'uploads/tv-show-logos/' . $file_name;
             }
         }
+    }
+
+    if ($thumbnail === '' && $poster !== '') {
+        $thumbnail = $poster;
     }
     
     // Keep existing sources - don't modify them here
@@ -104,8 +110,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Generate slug
     $slug = getUniqueSlug($conn, 'tv_shows', $title, $id);
     
-    $stmt = $conn->prepare("UPDATE tv_shows SET title=?, description=?, thumbnail=?, poster=?, release_year=?, category_id=?, featured=?, is_active=?, is_free=?, is_premium=?, slug=?, pre_roll_ad_id=?, mid_roll_ad_id=?, end_roll_ad_id=?, loop_ad_id=?, loop_interval=?, banner_ad_id=?, popup_ad_id=?, intro_ad_id=? WHERE id=?");
-    $stmt->bind_param("ssssssssssssiiiiiiii", $title, $description, $thumbnail, $poster, $release_year, $category_id, $featured, $is_active, $is_free, $is_premium, $slug, $pre_roll_ad_id, $mid_roll_ad_id, $end_roll_ad_id, $loop_ad_id, $loop_interval, $banner_ad_id, $popup_ad_id, $intro_ad_id, $id);
+    $stmt = $conn->prepare("UPDATE tv_shows SET title=?, description=?, thumbnail=?, poster=?, release_year=?, rating=?, category_id=?, featured=?, is_active=?, is_free=?, is_premium=?, slug=?, tmdb_id=?, pre_roll_ad_id=?, mid_roll_ad_id=?, end_roll_ad_id=?, loop_ad_id=?, loop_interval=?, banner_ad_id=?, popup_ad_id=?, intro_ad_id=? WHERE id=?");
+    $stmt->bind_param(
+        "ssssidiiiisiiiiiiiiiii",
+        $title,
+        $description,
+        $thumbnail,
+        $poster,
+        $release_year,
+        $rating,
+        $category_id,
+        $featured,
+        $is_active,
+        $is_free,
+        $is_premium,
+        $slug,
+        $tmdb_id,
+        $pre_roll_ad_id,
+        $mid_roll_ad_id,
+        $end_roll_ad_id,
+        $loop_ad_id,
+        $loop_interval,
+        $banner_ad_id,
+        $popup_ad_id,
+        $intro_ad_id,
+        $id
+    );
     
     if ($stmt->execute()) {
         $message = 'TV Show updated successfully';
@@ -144,21 +174,35 @@ include 'includes/header.php';
             <form method="POST" action="" enctype="multipart/form-data">
                 <div class="bg-gray-900 rounded-lg p-6">
                     <h2 class="text-2xl font-bold mb-6">TV Show Information</h2>
+
+                    <div class="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                        <h3 class="text-lg font-semibold mb-3"><i class="fas fa-tv mr-2"></i>Fetch from TMDB</h3>
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <input type="text" id="tmdb-input" placeholder="TMDB ID or URL (e.g. 1396 or https://www.themoviedb.org/tv/1396-breaking-bad)"
+                                   value="<?php echo !empty($show['tmdb_id']) ? (int) $show['tmdb_id'] : ''; ?>"
+                                   class="flex-1 bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white">
+                            <button type="button" id="tmdb-fetch-btn" class="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded font-semibold whitespace-nowrap">
+                                <i class="fas fa-download mr-2"></i>Fetch
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-2">Auto-fills title, description, poster, year &amp; rating. Images are linked directly from TMDB.</p>
+                        <div id="tmdb-fetch-status" class="text-sm mt-2 hidden"></div>
+                    </div>
                     
                     <div class="space-y-4">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-semibold mb-2">Title *</label>
-                                <input type="text" name="title" value="<?php echo htmlspecialchars($show['title'] ?? ''); ?>" 
+                                <input type="text" name="title" id="title" value="<?php echo htmlspecialchars($show['title'] ?? ''); ?>" 
                                        required
                                        class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold mb-2">Category</label>
-                                <select name="category_id" class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                                <select name="category_id" id="category_id" class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
                                     <option value="">Select Category</option>
                                     <?php foreach ($categories as $cat): ?>
-                                    <option value="<?php echo $cat['id']; ?>" <?php echo ($show['category_id'] ?? '') == $cat['id'] ? 'selected' : ''; ?>>
+                                    <option value="<?php echo $cat['id']; ?>" data-name="<?php echo htmlspecialchars(strtolower($cat['name'])); ?>" <?php echo ($show['category_id'] ?? '') == $cat['id'] ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars($cat['name']); ?>
                                     </option>
                                     <?php endforeach; ?>
@@ -168,7 +212,7 @@ include 'includes/header.php';
 
                         <div>
                             <label class="block text-sm font-semibold mb-2">Description</label>
-                            <textarea name="description" rows="4" 
+                            <textarea name="description" id="description" rows="4" 
                                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white"><?php echo htmlspecialchars($show['description'] ?? ''); ?></textarea>
                         </div>
 
@@ -185,16 +229,29 @@ include 'includes/header.php';
                                 <input type="file" name="poster_file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                                        class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm">
                                 <p class="text-xs text-gray-400">Upload new image or paste URL below</p>
-                                <input type="text" name="poster" value="<?php echo htmlspecialchars($show['poster'] ?? ''); ?>" 
+                                <input type="text" name="poster" id="poster" value="<?php echo htmlspecialchars($show['poster'] ?? ''); ?>" 
                                        placeholder="Or enter banner/poster URL"
                                        class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm">
+                                <input type="hidden" name="thumbnail" id="thumbnail" value="<?php echo htmlspecialchars($show['thumbnail'] ?? ''); ?>">
                             </div>
                         </div>
 
-                        <div>
-                            <label class="block text-sm font-semibold mb-2">Release Year</label>
-                            <input type="number" name="release_year" value="<?php echo $show['release_year'] ?? date('Y'); ?>" 
-                                   class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-semibold mb-2">Release Year</label>
+                                <input type="number" name="release_year" id="release_year" value="<?php echo $show['release_year'] ?? date('Y'); ?>" 
+                                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-2">Rating</label>
+                                <input type="number" step="0.1" min="0" max="10" name="rating" id="rating" value="<?php echo htmlspecialchars($show['rating'] ?? '0'); ?>"
+                                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-2">TMDB ID</label>
+                                <input type="number" name="tmdb_id" id="tmdb_id" value="<?php echo htmlspecialchars($show['tmdb_id'] ?? ''); ?>"
+                                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white" placeholder="Optional">
+                            </div>
                         </div>
 
                         <div class="p-4 bg-gray-800 rounded-lg">
@@ -268,5 +325,55 @@ include 'includes/header.php';
         </div>
     </div>
 </div>
+
+<script>
+document.getElementById('tmdb-fetch-btn')?.addEventListener('click', async function () {
+    const input = document.getElementById('tmdb-input').value.trim();
+    const status = document.getElementById('tmdb-fetch-status');
+    if (!input) {
+        status.textContent = 'Enter a TMDB ID or URL';
+        status.className = 'text-sm mt-2 text-red-400';
+        status.classList.remove('hidden');
+        return;
+    }
+    status.textContent = 'Fetching from TMDB...';
+    status.className = 'text-sm mt-2 text-blue-400';
+    status.classList.remove('hidden');
+    this.disabled = true;
+    try {
+        const res = await fetch('<?php echo BASE_URL; ?>/admin/api/tmdb-fetch.php?type=tv&input=' + encodeURIComponent(input));
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Fetch failed');
+        const d = json.data;
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+        setVal('tmdb_id', d.tmdb_id);
+        setVal('title', d.title);
+        setVal('description', d.description);
+        setVal('poster', d.poster || d.backdrop || '');
+        setVal('thumbnail', d.thumbnail || d.poster || '');
+        setVal('release_year', d.release_year || '');
+        setVal('rating', d.rating || 0);
+        if (Array.isArray(d.genres) && d.genres.length) {
+            const cat = document.getElementById('category_id');
+            if (cat && !cat.value) {
+                const names = d.genres.map(g => String(g).toLowerCase());
+                for (const opt of cat.options) {
+                    const n = (opt.dataset.name || opt.textContent || '').toLowerCase().trim();
+                    if (n && names.includes(n)) {
+                        cat.value = opt.value;
+                        break;
+                    }
+                }
+            }
+        }
+        status.textContent = 'TV show data fetched successfully! Review and click Save Changes.';
+        status.className = 'text-sm mt-2 text-green-400';
+    } catch (e) {
+        status.textContent = e.message;
+        status.className = 'text-sm mt-2 text-red-400';
+    }
+    this.disabled = false;
+});
+</script>
 
 <?php include 'includes/footer.php'; ?>

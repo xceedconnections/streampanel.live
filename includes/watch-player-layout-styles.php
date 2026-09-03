@@ -201,6 +201,8 @@ $watch_player_layout_styles_included = true;
     text-align: center;
     border-top: 1px solid rgba(255,255,255,0.1);
     background: rgba(0,0,0,0.3);
+    position: relative;
+    z-index: 5;
 }
 @media (min-width: 768px) {
     .try-another-source-section {

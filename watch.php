@@ -934,6 +934,9 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
                 <i class="fas fa-heart" id="favoriteIconMobile"></i>
             </button>
             <?php endif; ?>
+            <button type="button" class="header-back-btn" onclick="openStreamReportModal()" aria-label="Report" title="Report a problem">
+                <i class="fas fa-flag"></i>
+            </button>
             
             <div class="viewer-count-header" id="viewer-count-mobile">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -973,6 +976,9 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
                     <i class="fas fa-heart" id="favoriteIconDesktop"></i>
                 </button>
                 <?php endif; ?>
+                <button type="button" class="header-back-btn" onclick="openStreamReportModal()" aria-label="Report" title="Report a problem">
+                    <i class="fas fa-flag"></i>
+                </button>
                 
                 <div class="viewer-count-header" id="viewer-count-desktop">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1015,6 +1021,9 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
                 <i class="fas fa-heart" id="favoriteIconMobile"></i>
             </button>
             <?php endif; ?>
+            <button type="button" class="header-back-btn" onclick="openStreamReportModal()" aria-label="Report" title="Report a problem">
+                <i class="fas fa-flag"></i>
+            </button>
             <div class="viewer-count-header" id="viewer-count-mobile">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
@@ -1030,7 +1039,7 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
         </div>
         <div class="desktop-header">
             <button class="header-back-btn" onclick="handleBack()" aria-label="Back to movie">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M19 12H5"></path>
                     <path d="m12 19-7-7 7-7"></path>
                 </svg>
@@ -1048,6 +1057,9 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
                     <i class="fas fa-heart" id="favoriteIconDesktop"></i>
                 </button>
                 <?php endif; ?>
+                <button type="button" class="header-back-btn" onclick="openStreamReportModal()" aria-label="Report" title="Report a problem">
+                    <i class="fas fa-flag"></i>
+                </button>
                 <div class="viewer-count-header" id="viewer-count-desktop">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
@@ -1167,8 +1179,24 @@ if ($type === 'tv_episode' && !empty($sources)): ?>
                     <?php endif; ?>
                             <?php endforeach; ?>
             </div>
+            <p class="try-another-source-text" style="margin-top: 0.75rem;">
+                <button type="button" onclick="openStreamReportModal()" style="background:none;border:none;color:#e50914;font-weight:700;cursor:pointer;padding:0;">Report a problem</button>
+            </p>
                     </div>
+                    <?php elseif ($use_advanced_player && ($type === 'tv_episode' || $type === 'movie')): ?>
+        <div class="try-another-source-section">
+            <button type="button" onclick="openStreamReportModal()" class="try-source-link">Report a problem</button>
+        </div>
                     <?php endif; ?>
+
+        <?php
+        if ($use_advanced_player && ($type === 'tv_episode' || $type === 'movie') && !empty($content['id'])) {
+            $report_content_type = ($type === 'tv_episode') ? 'tv_episode' : 'movie';
+            $report_content_id = (int) $content['id'];
+            $report_source_index = (int) ($current_source_index ?? 0);
+            include __DIR__ . '/includes/stream-report-markup.php';
+        }
+        ?>
 
         <?php if ($type === 'movie'): ?>
         <?php $movieDownloadLinks = getActiveDownloadLinks($content); ?>
@@ -1930,29 +1958,20 @@ function handleBack() {
 }
 
 function toggleFullscreen() {
+    if (typeof window.streamToggleFullscreen === 'function') {
+        window.streamToggleFullscreen('player-container');
+        return;
+    }
     const playerContainer = document.getElementById('player-container');
     if (!playerContainer) return;
-
-    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
-        if (playerContainer.requestFullscreen) {
-            playerContainer.requestFullscreen();
-        } else if (playerContainer.webkitRequestFullscreen) {
-            playerContainer.webkitRequestFullscreen();
-        } else if (playerContainer.mozRequestFullScreen) {
-            playerContainer.mozRequestFullScreen();
-        } else if (playerContainer.msRequestFullscreen) {
-            playerContainer.msRequestFullscreen();
-        }
+    const fs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+    if (!fs) {
+        const req = playerContainer.requestFullscreen || playerContainer.webkitRequestFullscreen || playerContainer.mozRequestFullScreen || playerContainer.msRequestFullscreen;
+        if (req) req.call(playerContainer);
     } else {
-        if (document.exitFullscreen) {
-            document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-            document.webkitExitFullscreen();
-        } else if (document.mozCancelFullScreen) {
-            document.mozCancelFullScreen();
-        } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
-        }
+        const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+        if (exit) exit.call(document);
+        if (typeof window.resetPlayerBrightness === 'function') window.resetPlayerBrightness();
     }
 }
 
@@ -2041,31 +2060,20 @@ function handleBack() {
 
 // Fullscreen functionality
 function toggleFullscreen() {
+    if (typeof window.streamToggleFullscreen === 'function') {
+        window.streamToggleFullscreen('player-container');
+        return;
+    }
     const playerContainer = document.getElementById('player-container');
     if (!playerContainer) return;
-    
-    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
-        // Enter fullscreen
-        if (playerContainer.requestFullscreen) {
-            playerContainer.requestFullscreen();
-        } else if (playerContainer.webkitRequestFullscreen) {
-            playerContainer.webkitRequestFullscreen();
-        } else if (playerContainer.mozRequestFullScreen) {
-            playerContainer.mozRequestFullScreen();
-        } else if (playerContainer.msRequestFullscreen) {
-            playerContainer.msRequestFullscreen();
-        }
+    const fs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+    if (!fs) {
+        const req = playerContainer.requestFullscreen || playerContainer.webkitRequestFullscreen || playerContainer.mozRequestFullScreen || playerContainer.msRequestFullscreen;
+        if (req) req.call(playerContainer);
     } else {
-        // Exit fullscreen
-        if (document.exitFullscreen) {
-            document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-            document.webkitExitFullscreen();
-        } else if (document.mozCancelFullScreen) {
-            document.mozCancelFullScreen();
-        } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
-        }
+        const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+        if (exit) exit.call(document);
+        if (typeof window.resetPlayerBrightness === 'function') window.resetPlayerBrightness();
     }
 }
 
@@ -2189,3 +2197,5 @@ document.addEventListener('keydown', function(e) {
 <?php endif; ?>
 <?php endif; ?>
 </script>
+<?php include __DIR__ . '/includes/player-fullscreen.js.php'; ?>
+<?php include __DIR__ . '/includes/player-touch-gestures.js.php'; ?>

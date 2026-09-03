@@ -147,7 +147,7 @@ if ($channel) {
     <meta name="mobile-web-app-capable" content="yes">
     
     <!-- Primary Meta Tags -->
-    <title>Watch <?php echo htmlspecialchars($pageTitle); ?> Live</title>
+    <title><?php echo htmlspecialchars($pageTitle); ?></title>
     <meta name="description" content="<?php echo htmlspecialchars($metaDescription); ?>">
     <meta name="keywords" content="<?php echo htmlspecialchars($metaKeywords); ?>">
     

@@ -188,7 +188,11 @@
         function finish() {
             if (typeof afterAds === 'function') afterAds();
             var video = document.getElementById('videoPlayer');
-            if (video) window.setupPlaybackAds(video);
+            var embed = document.getElementById('html-embed-container');
+            var usingEmbed = embed && embed.style.display !== 'none' && embed.querySelector('iframe');
+            if (video && !usingEmbed && video.style.display !== 'none') {
+                window.setupPlaybackAds(video);
+            }
         }
         if (adsData.intro_ad && !introAdShown) {
             introAdShown = true;

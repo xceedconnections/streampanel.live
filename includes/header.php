@@ -7,50 +7,7 @@ require_once __DIR__ . '/../admin/includes/functions.php';
 $conn = getDBConnection();
 $site_name = getSetting($conn, 'site_name', 'StreamFlix');
 
-// Check maintenance mode (allow admin to bypass)
-$maintenance_mode = getSetting($conn, 'maintenance_mode', '0');
-$is_admin = isset($_SESSION['admin_id']);
-
-// If maintenance mode is enabled and user is not admin, show maintenance page
-if ($maintenance_mode == '1' && !$is_admin) {
-    // Don't include header/footer, just show maintenance message
-    ?>
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Site Under Maintenance - <?php echo htmlspecialchars($site_name); ?></title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-        <style>
-            body { background: linear-gradient(135deg, #1a1a1a 0%, #000000 100%); }
-        </style>
-    </head>
-    <body class="min-h-screen flex items-center justify-center">
-        <div class="text-center px-4">
-            <div class="mb-8">
-                <i class="fas fa-tools text-6xl text-yellow-500 mb-4"></i>
-            </div>
-            <h1 class="text-5xl font-bold text-white mb-4">SITE IS UNDER MAINTENANCE</h1>
-            <p class="text-xl text-gray-400 mb-8">We're currently performing some updates. Please check back soon.</p>
-            <div class="flex justify-center space-x-4">
-                <button onclick="location.reload()" class="bg-red-600 hover:bg-red-700 px-6 py-3 rounded font-semibold">
-                    <i class="fas fa-sync-alt mr-2"></i>Refresh Page
-                </button>
-            </div>
-        </div>
-        <script>
-            // Auto-refresh every 30 seconds to check if maintenance is disabled
-            setTimeout(function() {
-                location.reload();
-            }, 30000);
-        </script>
-    </body>
-    </html>
-    <?php
-    exit();
-}
+// Maintenance mode is enforced globally in includes/maintenance-gate.php (via config.php)
 
 // Check which sections are enabled
 $enable_movies = isSectionEnabled($conn, 'movies');
@@ -182,7 +139,7 @@ if (!empty($page_title) && stripos($page_title, $site_name) === false) {
         }
     </style>
 </head>
-<body class="bg-black text-white">
+<body class="bg-black text-white has-stream-mobile-nav">
     <?php renderPublicCustomCode($conn, 'custom_code_body'); ?>
     <nav class="fixed top-0 left-0 right-0 z-50 navbar-blur">
         <div class="container mx-auto px-4 py-3 flex items-center justify-between">

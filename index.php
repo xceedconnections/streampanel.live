@@ -369,6 +369,8 @@ include 'includes/header.php';
     gap: 0.75rem;
     padding-top: 0.75rem;
     margin-top: 0.25rem;
+    width: 100%;
+    max-width: 22rem;
 }
 @media (min-width: 640px) {
     .hero-actions {
@@ -377,6 +379,8 @@ include 'includes/header.php';
         gap: 1rem;
         padding-top: 1rem;
         margin-top: 0.5rem;
+        max-width: none;
+        width: auto;
     }
 }
 @media (min-width: 768px) {
@@ -384,28 +388,37 @@ include 'includes/header.php';
         padding-top: 1rem;
     }
 }
-.btn-play-hero {
+.btn-play-hero,
+.btn-info-hero {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    background: #fff;
-    color: #000;
-    padding: 0.5rem 1rem;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.65rem 1rem;
     border-radius: 0.25rem;
     font-weight: 700;
     text-decoration: none;
     transition: background 0.2s;
     font-size: 0.875rem;
 }
+.btn-play-hero {
+    background: #fff;
+    color: #000;
+}
 @media (min-width: 640px) {
-    .btn-play-hero {
+    .btn-play-hero,
+    .btn-info-hero {
+        width: auto;
+        min-width: 10.5rem;
         padding: 0.75rem 1.5rem;
         font-size: 1rem;
     }
 }
 @media (min-width: 768px) {
-    .btn-play-hero {
+    .btn-play-hero,
+    .btn-info-hero {
         padding: 0.75rem 2rem;
     }
 }
@@ -413,30 +426,9 @@ include 'includes/header.php';
     background: rgba(255,255,255,0.9);
 }
 .btn-info-hero {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
     background: rgba(107,114,128,0.4);
     color: #fff;
-    padding: 0.5rem 1rem;
-    border-radius: 0.25rem;
-    font-weight: 700;
-    text-decoration: none;
-    transition: background 0.2s;
     backdrop-filter: blur(12px);
-    font-size: 0.875rem;
-}
-@media (min-width: 640px) {
-    .btn-info-hero {
-        padding: 0.75rem 1.5rem;
-        font-size: 1rem;
-    }
-}
-@media (min-width: 768px) {
-    .btn-info-hero {
-        padding: 0.75rem 2rem;
-    }
 }
 .btn-info-hero:hover {
     background: rgba(107,114,128,0.6);

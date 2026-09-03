@@ -13,7 +13,7 @@ function getTmdbApiKey($conn): string
     return trim(getSetting($conn, 'tmdb_api_key', ''));
 }
 
-function parseTmdbIdFromInput(string $input): ?int
+function parseTmdbIdFromInput(string $input, string $mediaType = 'movie'): ?int
 {
     $input = trim($input);
     if ($input === '') {
@@ -22,10 +22,15 @@ function parseTmdbIdFromInput(string $input): ?int
     if (preg_match('/^\d+$/', $input)) {
         return (int) $input;
     }
-    if (preg_match('#themoviedb\.org/movie/(\d+)#i', $input, $m)) {
+    $mediaType = strtolower($mediaType) === 'tv' ? 'tv' : 'movie';
+    if (preg_match('#themoviedb\.org/' . $mediaType . '/(\d+)#i', $input, $m)) {
         return (int) $m[1];
     }
-    if (preg_match('#tmdb\.org/movie/(\d+)#i', $input, $m)) {
+    if (preg_match('#tmdb\.org/' . $mediaType . '/(\d+)#i', $input, $m)) {
+        return (int) $m[1];
+    }
+    // Fallback: accept either movie or tv URL when type is ambiguous
+    if (preg_match('#(?:themoviedb|tmdb)\.org/(?:movie|tv)/(\d+)#i', $input, $m)) {
         return (int) $m[1];
     }
     return null;
@@ -155,5 +160,88 @@ function fetchTmdbMovieData($conn, int $tmdbId): array
         'director' => $director,
         'genres' => $genres,
         'cast_data' => $cast,
+    ];
+}
+
+function fetchTmdbTvData($conn, int $tmdbId): array
+{
+    $show = tmdbApiRequest($conn, "tv/$tmdbId", ['language' => 'en-US']);
+    if (isset($show['error'])) {
+        return $show;
+    }
+
+    $credits = tmdbApiRequest($conn, "tv/$tmdbId/credits", ['language' => 'en-US']);
+    $cast = [];
+    if (!isset($credits['error']) && !empty($credits['cast'])) {
+        foreach (array_slice($credits['cast'], 0, 15) as $person) {
+            $cast[] = [
+                'id' => $person['id'] ?? null,
+                'name' => $person['name'] ?? '',
+                'character' => $person['character'] ?? '',
+                'profile_path' => $person['profile_path'] ?? null,
+            ];
+        }
+    }
+
+    $creator = '';
+    if (!empty($show['created_by'][0]['name'])) {
+        $creator = $show['created_by'][0]['name'];
+    }
+
+    $genres = [];
+    if (!empty($show['genres'])) {
+        foreach ($show['genres'] as $g) {
+            if (!empty($g['name'])) {
+                $genres[] = $g['name'];
+            }
+        }
+    }
+
+    $year = null;
+    if (!empty($show['first_air_date'])) {
+        $year = (int) substr($show['first_air_date'], 0, 4);
+    }
+
+    $videos = tmdbApiRequest($conn, "tv/$tmdbId/videos", ['language' => 'en-US']);
+    $trailerUrl = '';
+    if (!isset($videos['error']) && !empty($videos['results'])) {
+        foreach ($videos['results'] as $video) {
+            if (($video['type'] ?? '') === 'Trailer' && ($video['site'] ?? '') === 'YouTube' && !empty($video['key'])) {
+                $trailerUrl = 'https://www.youtube.com/watch?v=' . $video['key'];
+                break;
+            }
+        }
+        if ($trailerUrl === '') {
+            foreach ($videos['results'] as $video) {
+                if (($video['site'] ?? '') === 'YouTube' && !empty($video['key'])) {
+                    $trailerUrl = 'https://www.youtube.com/watch?v=' . $video['key'];
+                    break;
+                }
+            }
+        }
+    }
+
+    $runtime = 0;
+    if (!empty($show['episode_run_time'][0])) {
+        $runtime = (int) $show['episode_run_time'][0];
+    }
+
+    return [
+        'tmdb_id' => $tmdbId,
+        'title' => $show['name'] ?? '',
+        'description' => $show['overview'] ?? '',
+        'thumbnail' => tmdbImageUrl($show['poster_path'] ?? null, 'w342'),
+        'poster' => tmdbImageUrl($show['poster_path'] ?? null, 'w500'),
+        'backdrop' => tmdbImageUrl($show['backdrop_path'] ?? null, 'w1280'),
+        'logo' => '',
+        'trailer_url' => $trailerUrl,
+        'duration' => $runtime,
+        'release_year' => $year,
+        'rating' => round((float) ($show['vote_average'] ?? 0), 1),
+        'director' => $creator,
+        'genres' => $genres,
+        'cast_data' => $cast,
+        'number_of_seasons' => (int) ($show['number_of_seasons'] ?? 0),
+        'number_of_episodes' => (int) ($show['number_of_episodes'] ?? 0),
     ];
 }

@@ -66,6 +66,7 @@
     </footer>
     <?php endif; ?>
 
+    <?php include __DIR__ . '/mobile-nav.php'; ?>
     <?php
     if (isset($conn) && function_exists('renderPublicCustomCode')) {
         renderPublicCustomCode($conn, 'custom_code_after_body');

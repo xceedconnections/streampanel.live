@@ -73,6 +73,9 @@ $id = $_GET['id'] ?? null;
 $source_index = isset($_GET['source']) ? intval($_GET['source']) : null;
 $channel = null;
 $error = '';
+$showPremiumGate = false;
+$has_valid_sources = false;
+$current_source_index = 0;
 $isAndroidTV = isset($_SERVER['HTTP_USER_AGENT']) && preg_match('/(Android TV|AFT|BRAVIA|MiTV|SmartTV|GoogleTV|Tizen|Web0S|HbbTV)/i', $_SERVER['HTTP_USER_AGENT']);
 
 // Get enabled sections for navigation
@@ -705,6 +708,20 @@ if ($channel) {
     position: relative; /* Ensure proper stacking context */
     z-index: 1; /* Video behind logo */
 }
+.stream-speed-meter {
+    position: absolute;
+    left: 8px;
+    bottom: 52px;
+    z-index: 25;
+    font-size: 11px;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    pointer-events: none;
+    letter-spacing: 0.02em;
+    display: none;
+}
 
 /* Stream Loading Overlay - Netflix Style */
 .stream-loading-overlay {
@@ -993,6 +1010,8 @@ if ($channel) {
     text-align: center;
     border-top: 1px solid rgba(255,255,255,0.1);
     background: rgba(0,0,0,0.3);
+    position: relative;
+    z-index: 5;
 }
 @media (min-width: 768px) {
     .try-another-source-section {
@@ -1741,6 +1760,11 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                         <i class="fas fa-heart" id="favoriteIconMobile"></i>
                     </button>
                     <?php endif; ?>
+                    <?php if (!$showPremiumGate): ?>
+                    <button type="button" class="header-back-btn" onclick="openStreamReportModal()" aria-label="Report stream" title="Report broken stream">
+                        <i class="fas fa-flag"></i>
+                    </button>
+                    <?php endif; ?>
                     
                     
                     <div class="viewer-count-header" id="viewer-count-mobile">
@@ -1780,6 +1804,11 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                         <button id="favoriteBtnDesktop" onclick="toggleFavorite()" 
                                 class="header-back-btn" aria-label="Add to Favorites" title="Add to Favorites">
                             <i class="fas fa-heart" id="favoriteIconDesktop"></i>
+                        </button>
+                        <?php endif; ?>
+                        <?php if (!$showPremiumGate): ?>
+                        <button type="button" class="header-back-btn" onclick="openStreamReportModal()" aria-label="Report stream" title="Report broken stream">
+                            <i class="fas fa-flag"></i>
                         </button>
                         <?php endif; ?>
                         
@@ -1935,6 +1964,8 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                     <?php endif; ?>
                 </div>
                 
+                <div id="stream-speed-meter" class="stream-speed-meter" aria-live="polite"></div>
+
                 <!-- Ad Overlay (inside player container) -->
                 <div id="ad-overlay" class="ad-overlay" style="display: none;">
                     <div class="ad-container">
@@ -1993,9 +2024,25 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                         <?php endif; ?>
                     <?php endforeach; ?>
                 </div>
+                <?php if (!$showPremiumGate): ?>
+                <p class="try-another-source-text" style="margin-top: 0.75rem;">
+                    <button type="button" onclick="openStreamReportModal()" style="background:none;border:none;color:#e50914;font-weight:700;cursor:pointer;padding:0;">Report a problem</button>
+                </p>
+                <?php endif; ?>
+            </div>
+        <?php elseif (!$showPremiumGate && !$error && $has_valid_sources): ?>
+            <div class="try-another-source-section">
+                <button type="button" onclick="openStreamReportModal()" class="try-source-link">Report a problem</button>
             </div>
         <?php endif; ?>
         
+        <?php
+        $report_content_type = 'live_tv';
+        $report_content_id = (int) ($channel['id'] ?? 0);
+        $report_source_index = (int) ($current_source_index ?? 0);
+        include __DIR__ . '/../includes/stream-report-markup.php';
+        ?>
+
         <!-- Error Banner -->
         <div id="error-banner" class="error-banner" style="display: none;">
             <div class="error-banner-content">
@@ -2084,9 +2131,9 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                 <div class="suggested-channels-grid">
                     <?php foreach ($suggested_channels as $suggested_channel): ?>
                         <?php
-                            // Construct URL: use /watch-live-tv/{slug} if slug exists, otherwise use /tv/tv-channel.php?id={id}
+                            // Channel info page: /tv/{slug} (play CTA goes to watch-live-tv)
                             if (!empty($suggested_channel['slug'])) {
-                                $suggested_url = BASE_URL . '/watch-live-tv/' . htmlspecialchars($suggested_channel['slug']);
+                                $suggested_url = BASE_URL . '/tv/' . htmlspecialchars($suggested_channel['slug']);
                             } else {
                                 $suggested_url = BASE_URL . '/tv/tv-channel.php?id=' . intval($suggested_channel['id']);
                             }
@@ -2264,8 +2311,29 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
         let currentSourceIndex = <?php 
             $active_sources = array_filter($sources ?? [], function($s) { return ($s['isActive'] ?? true) && ($s['isVisible'] ?? true); });
             $active_sources = array_values($active_sources);
-            echo $selected_source ? array_search($selected_source, $active_sources) : 0; 
+            $found_idx = $selected_source ? array_search($selected_source, $active_sources) : 0;
+            echo ($found_idx === false) ? 0 : (int) $found_idx;
         ?>;
+        const defaultSourceIndex = <?php
+            $active_for_default = array_values(array_filter($sources ?? [], function($s) {
+                return ($s['isActive'] ?? true) && ($s['isVisible'] ?? true);
+            }));
+            $default_idx = 0;
+            if (!empty($active_for_default)) {
+                $sorted_default = $active_for_default;
+                usort($sorted_default, function($a, $b) {
+                    return intval($a['priority'] ?? 999) <=> intval($b['priority'] ?? 999);
+                });
+                foreach ($active_for_default as $i => $src_row) {
+                    if ($src_row == $sorted_default[0]) {
+                        $default_idx = (int) $i;
+                        break;
+                    }
+                }
+            }
+            echo $default_idx;
+        ?>;
+        const EMBED_SOURCE_ENDPOINT = <?php echo json_encode(url('embed-source.php')); ?>;
         let selectedSource = <?php echo json_encode($selected_source ?? null); ?>;
         let streamUrl = selectedSource ? selectedSource.url : <?php echo json_encode($channel['stream_url'] ?? ''); ?>;
         let streamType = selectedSource ? selectedSource.type : 'html-embed';
@@ -2371,6 +2439,11 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
         let isLoadingStream = false;
         let loadingOverlayShown = false; // Track if loading overlay has been shown for current stream
         let loadingTimeout = null; // Timeout for showing loading failed if stream takes too long
+        let sourceFailoverBusy = false;
+        let failoverExhausted = false;
+        let triedSourceIndexes = [];
+        let ignoreMediaError = false;
+        let streamSpeedTimer = null;
 
         // Helper: wrap http URLs behind local HTTPS proxy to avoid mixed-content blocking
         function getProxiedStreamUrl(originalUrl) {
@@ -2384,6 +2457,141 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                 console.warn('[TV Channel] Failed to build proxied URL, using original:', e);
             }
             return originalUrl;
+        }
+
+        function formatStreamSpeed(bps) {
+            const n = Number(bps) || 0;
+            if (n <= 0) return '';
+            const kb = n / 1000;
+            if (kb < 1000) {
+                return Math.max(1, Math.round(kb)) + ' kb/s';
+            }
+            return (kb / 1000).toFixed(1) + ' Mb/s';
+        }
+
+        function stopStreamSpeedMeter() {
+            if (streamSpeedTimer) {
+                clearInterval(streamSpeedTimer);
+                streamSpeedTimer = null;
+            }
+            const el = document.getElementById('stream-speed-meter');
+            if (el) {
+                el.style.display = 'none';
+                el.textContent = '';
+            }
+        }
+
+        function updateStreamSpeed(bps) {
+            const el = document.getElementById('stream-speed-meter');
+            if (!el) return;
+            const label = formatStreamSpeed(bps);
+            if (!label) return;
+            el.textContent = label;
+            el.style.display = 'block';
+        }
+
+        function startHlsSpeedMeter() {
+            stopStreamSpeedMeter();
+            streamSpeedTimer = setInterval(function() {
+                if (!hlsInstance) return;
+                let bps = 0;
+                try {
+                    bps = hlsInstance.bandwidthEstimate || 0;
+                } catch (e) {}
+                updateStreamSpeed(bps);
+            }, 1000);
+        }
+
+        function startDashSpeedMeter() {
+            stopStreamSpeedMeter();
+            streamSpeedTimer = setInterval(function() {
+                if (!dashPlayer) return;
+                let value = 0;
+                try {
+                    if (typeof dashPlayer.getAverageThroughput === 'function') {
+                        value = dashPlayer.getAverageThroughput('video') || dashPlayer.getAverageThroughput() || 0;
+                    }
+                } catch (e) {}
+                if (!value) return;
+                const bps = value > 100000 ? value : value * 1000;
+                updateStreamSpeed(bps);
+            }, 1000);
+        }
+
+        function markSourceTried(idx) {
+            if (triedSourceIndexes.indexOf(idx) === -1) {
+                triedSourceIndexes.push(idx);
+            }
+        }
+
+        function nextUntriedSourceIndex() {
+            const total = Array.isArray(activeSources) ? activeSources.length : 0;
+            if (total < 2) return -1;
+            for (let step = 1; step < total; step++) {
+                const idx = (currentSourceIndex + step) % total;
+                if (triedSourceIndexes.indexOf(idx) === -1) {
+                    return idx;
+                }
+            }
+            return -1;
+        }
+
+        function applySourceAtIndex(index) {
+            const src = (Array.isArray(activeSources) && activeSources[index]) ? activeSources[index] : null;
+            if (!src) return false;
+            currentSourceIndex = index;
+            selectedSource = src;
+            streamType = src.type || 'html-embed';
+            streamUrl = src.url || '';
+            if (streamType === 'html-embed' && Array.isArray(embedHtmlSources) && embedHtmlSources[index]) {
+                streamUrl = embedHtmlSources[index];
+            }
+            try {
+                const u = new URL(window.location.href);
+                u.searchParams.set('source', String(index));
+                history.replaceState({}, '', u.toString());
+            } catch (e) {}
+            return true;
+        }
+
+        function destroyCurrentPlayers() {
+            ignoreMediaError = true;
+            stopStreamSpeedMeter();
+            if (hlsInstance) {
+                try { hlsInstance.destroy(); } catch (e) {}
+                hlsInstance = null;
+            }
+            if (dashPlayer) {
+                try { dashPlayer.reset(); } catch (e) {}
+                dashPlayer = null;
+            }
+            const video = document.getElementById('videoPlayer');
+            if (video) {
+                try {
+                    video.pause();
+                    video.removeAttribute('src');
+                    video.load();
+                } catch (e) {}
+            }
+            setTimeout(function() { ignoreMediaError = false; }, 800);
+        }
+
+        function switchToSource(index) {
+            if (!applySourceAtIndex(index)) return;
+            destroyCurrentPlayers();
+            streamLoaded = false;
+            isLoadingStream = false;
+            loadActualStream();
+        }
+
+        function showStreamError(message) {
+            stopStreamSpeedMeter();
+            const errMsg = document.getElementById('player-error-message');
+            const banner = document.getElementById('error-banner');
+            const bannerMsg = document.getElementById('error-banner-message');
+            if (errMsg) errMsg.style.display = 'block';
+            if (banner) banner.style.display = 'block';
+            if (bannerMsg) bannerMsg.textContent = message || 'Stream error';
         }
 
         // Helper: decode HTML entities (for embed sources that may be stored escaped)
@@ -2431,18 +2639,20 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                 loadingOverlayShown = true;
                 console.log('[TV Channel] Showing loading overlay:', message);
                 
-                // Set timeout to show "Loading Failed" if stream doesn't start within 90 seconds
                 if (loadingTimeout) {
                     clearTimeout(loadingTimeout);
                 }
                 loadingTimeout = setTimeout(function() {
                     const video = document.getElementById('videoPlayer');
-                    if (loadingOverlayShown && overlay.style.display !== 'none' && 
-                        (!video || video.paused || video.readyState < 3)) {
-                        showLoadingError('Loading Failed - Connection timeout - Your Region is Blocked');
-                        console.log('[TV Channel] Loading timeout - stream did not start within 90 seconds');
+                    if (!loadingOverlayShown || overlay.style.display === 'none') {
+                        return;
                     }
-                }, 90000); // 90 seconds timeout
+                    if (video && video.readyState >= 2) {
+                        return;
+                    }
+                    console.log('[TV Channel] Loading timeout - trying next source');
+                    handleSourceError('Stream failed to start');
+                }, 12000);
             }
         }
         
@@ -3285,7 +3495,6 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                 
                 if (htmlEmbedContainer) {
                     htmlEmbedContainer.style.display = 'block';
-                    // Get or create the embedFrame iframe
                     let embedFrame = document.getElementById('embedFrame');
                     if (!embedFrame) {
                         embedFrame = document.createElement('iframe');
@@ -3304,6 +3513,7 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                 // Hide JS-based players
                 video.style.display = 'none';
                 youtubeIframe.style.display = 'none';
+                stopStreamSpeedMeter();
 
                 streamLoaded = true;
                 isLoadingStream = false;
@@ -3318,11 +3528,29 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
 
                 if (htmlEmbedContainer) {
                     htmlEmbedContainer.style.display = 'block';
+                    let embedFrame = document.getElementById('embedFrame');
+                    if (!embedFrame) {
+                        embedFrame = document.createElement('iframe');
+                        embedFrame.id = 'embedFrame';
+                        embedFrame.style.width = '100%';
+                        embedFrame.style.height = '100%';
+                        embedFrame.style.border = '0';
+                        embedFrame.setAttribute('allowfullscreen', '');
+                        embedFrame.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+                        htmlEmbedContainer.innerHTML = '';
+                        htmlEmbedContainer.appendChild(embedFrame);
+                    }
+                    const params = new URLSearchParams();
+                    if (channelSlug) params.set('slug', channelSlug);
+                    else params.set('id', String(channelId));
+                    params.set('source', String(currentSourceIndex));
+                    embedFrame.src = EMBED_SOURCE_ENDPOINT + '?' + params.toString();
                 }
 
                 // Hide JS-based players
                 video.style.display = 'none';
                 youtubeIframe.style.display = 'none';
+                stopStreamSpeedMeter();
 
                 streamLoaded = true;
                 isLoadingStream = false;
@@ -3413,6 +3641,18 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                 console.log('[TV Channel] Using HLS.js for HLS stream', effectiveStreamUrl);
                 hlsInstance = new Hls();
                 
+                hlsInstance.on(Hls.Events.FRAG_LOADED, function (event, data) {
+                    try {
+                        if (data && data.stats && data.stats.total && data.stats.loading) {
+                            const ms = (data.stats.loading.end - data.stats.loading.start) || 1;
+                            const bps = (data.stats.total * 8) / (ms / 1000);
+                            updateStreamSpeed(bps);
+                        } else if (hlsInstance && hlsInstance.bandwidthEstimate) {
+                            updateStreamSpeed(hlsInstance.bandwidthEstimate);
+                        }
+                    } catch (e) {}
+                });
+
                 hlsInstance.on(Hls.Events.ERROR, function (event, data) {
                     console.error('[TV Channel] HLS.js error:', data);
                     if (data.fatal) {
@@ -3453,6 +3693,7 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                     console.log('[TV Channel] HLS manifest parsed, starting playback');
                     streamLoaded = true;
                     isLoadingStream = false;
+                    startHlsSpeedMeter();
                     
                     // Ensure video is muted for autoplay (browser requirement)
                     video.muted = true;
@@ -3514,6 +3755,7 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                 // Listen for DASH player events
                 dashPlayer.on('streamInitialized', function() {
                     console.log('[TV Channel] DASH stream initialized');
+                    startDashSpeedMeter();
                 });
                 
                 dashPlayer.on('error', function(error) {
@@ -3650,10 +3892,13 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
             
             // Native video error handler
             video.addEventListener('error', function() {
+                if (ignoreMediaError || sourceFailoverBusy) {
+                    return;
+                }
                 console.error('[TV Channel] Video playback error');
                 showLoadingError('Loading Failed');
                 handleSourceError('Video playback error');
-            });
+            }, { once: true });
             
             // Add click handler to start playback if autoplay fails (only for non-YouTube)
             if (!isYouTube) {
@@ -3716,9 +3961,46 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
         
         // Handle source error
         function handleSourceError(message) {
-            document.getElementById('player-error-message').style.display = 'block';
-            document.getElementById('error-banner').style.display = 'block';
-            document.getElementById('error-banner-message').textContent = message;
+            if (ignoreMediaError || sourceFailoverBusy) {
+                return;
+            }
+            if (message && String(message).indexOf('Opening stream') !== -1) {
+                showStreamError(message);
+                return;
+            }
+            if (failoverExhausted) {
+                showLoadingError('Loading Failed');
+                showStreamError(message);
+                return;
+            }
+
+            markSourceTried(currentSourceIndex);
+            const next = nextUntriedSourceIndex();
+            if (next >= 0) {
+                sourceFailoverBusy = true;
+                console.log('[TV Channel] Source ' + currentSourceIndex + ' failed, trying source ' + next);
+                showLoadingOverlay('Trying another source...');
+                setTimeout(function() {
+                    sourceFailoverBusy = false;
+                    switchToSource(next);
+                }, 50);
+                return;
+            }
+
+            failoverExhausted = true;
+            if (currentSourceIndex !== defaultSourceIndex) {
+                sourceFailoverBusy = true;
+                console.log('[TV Channel] All sources failed, keeping first source');
+                setTimeout(function() {
+                    sourceFailoverBusy = false;
+                    switchToSource(defaultSourceIndex);
+                    showLoadingError('Loading Failed');
+                    showStreamError(message || 'Stream unavailable');
+                }, 50);
+                return;
+            }
+            showLoadingError('Loading Failed');
+            showStreamError(message || 'Stream unavailable');
         }
         
         // Back to Live TV
@@ -3728,33 +4010,25 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
         
         // Fullscreen toggle
         function toggleFullscreen() {
+            if (typeof window.streamToggleFullscreen === 'function') {
+                window.streamToggleFullscreen('player-container');
+                return;
+            }
             const container = document.getElementById('player-container');
-            if (!document.fullscreenElement) {
-                if (container.requestFullscreen) {
-                    container.requestFullscreen();
-                } else if (container.mozRequestFullScreen) {
-                    container.mozRequestFullScreen();
-                } else if (container.webkitRequestFullscreen) {
-                    container.webkitRequestFullscreen();
-                } else if (container.msRequestFullscreen) {
-                    container.msRequestFullscreen();
-                }
+            if (!container) return;
+            const fs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+            if (!fs) {
+                const req = container.requestFullscreen || container.webkitRequestFullscreen || container.mozRequestFullScreen || container.msRequestFullscreen;
+                if (req) req.call(container);
             } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.mozCancelFullScreen) {
-                    document.mozCancelFullScreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                } else if (document.msExitFullscreen) {
-                    document.msExitFullscreen();
-                }
+                const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                if (exit) exit.call(document);
             }
         }
         
         // Fullscreen change handler
-        document.addEventListener('fullscreenchange', () => {
-            isFullscreen = !!document.fullscreenElement;
+        function onTvFullscreenChange() {
+            isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
             const maximizeIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3m-18 0v3a2 2 0 0 0 2 2h3"></path></svg>';
             const minimizeIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18h3a2 2 0 0 0 2-2v-3m-18 0v3a2 2 0 0 0 2 2h3"></path></svg>';
             const btnMobile = document.getElementById('fullscreen-button-mobile');
@@ -3831,7 +4105,14 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
                     videoWrapper.classList.remove('smart-tv-fullscreen');
                 }
             }
-        });
+            if (!isFullscreen && typeof window.resetPlayerBrightness === 'function') {
+                window.resetPlayerBrightness();
+            }
+        }
+        document.addEventListener('fullscreenchange', onTvFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', onTvFullscreenChange);
+        document.addEventListener('mozfullscreenchange', onTvFullscreenChange);
+        document.addEventListener('MSFullscreenChange', onTvFullscreenChange);
         
         // Android TV remote "Back" support
         <?php if ($isAndroidTV): ?>
@@ -3999,6 +4280,8 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
             }
         });
     </script>
+    <?php include __DIR__ . '/../includes/player-fullscreen.js.php'; ?>
+    <?php include __DIR__ . '/../includes/player-touch-gestures.js.php'; ?>
 <?php endif; ?>
 
 <?php if ($channel && !empty($footer_heading)): ?>

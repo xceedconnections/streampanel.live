@@ -255,3 +255,6 @@ syncHtaccess(APP_BASE_PATH);
 persistDetectedSiteUrl(BASE_URL);
 
 date_default_timezone_set('UTC');
+
+// Block public site when maintenance mode is enabled (admin area still works)
+require_once __DIR__ . '/../includes/maintenance-gate.php';
