@@ -41,7 +41,7 @@ if ($enabled_sections_count === 1) {
     }
 }
 
-// Featured = poster row. Homepage big banner comes from Admin > Sliders.
+// Homepage movie rows — featured only
 $featured_movies = [];
 $all_movies = [];
 $popular_movies = [];
@@ -52,8 +52,7 @@ if ($enable_movies) {
         "SELECT * FROM movies
          WHERE COALESCE(featured, 0) = 1
            AND COALESCE(is_active, 1) = 1
-         ORDER BY rating DESC, updated_at DESC, id DESC
-         LIMIT 20"
+         ORDER BY rating DESC, views DESC, id DESC"
     )->fetch_all(MYSQLI_ASSOC);
 
     $all_movies = $conn->query(
@@ -71,31 +70,34 @@ if ($enable_movies) {
 // Homepage trending banner = Admin > Sliders with "Display on Home"
 $hero_slides = getHomeHeroSlides($conn);
 
-// Get TV shows for index - featured first, max 6 (2 rows × 3), not in slider
-$tv_shows_for_index = [];
+// Featured TV Shows — featured only
+$featured_tv_shows = [];
 if ($enable_tv_shows) {
-    $tv_shows_for_index = $conn->query("SELECT * FROM tv_shows WHERE is_active = 1 ORDER BY featured DESC, created_at DESC LIMIT 6")->fetch_all(MYSQLI_ASSOC);
+    ensureTvShowsSchema($conn);
+    $featured_tv_shows = $conn->query(
+        "SELECT * FROM tv_shows
+         WHERE COALESCE(featured, 0) = 1
+           AND COALESCE(is_active, 1) = 1
+         ORDER BY created_at DESC, id DESC"
+    )->fetch_all(MYSQLI_ASSOC);
 }
 
-// Get live TV channels (only if enabled) - filter out channels without active sources
-$live_tv_channels = [];
+// Featured Live TV — featured channels with playable sources
+$featured_live_tv_channels = [];
 if ($enable_live_tv) {
-    // First, get channels that have sources configured
-    $all_channels = $conn->query("SELECT * FROM live_tv_channels 
-                                   WHERE is_active = 1 
-                                   AND (sources IS NOT NULL AND sources != '' AND sources != '[]' AND sources != 'null')
-                                   AND sources LIKE '%\"url\"%'
-                                   ORDER BY featured DESC, views DESC LIMIT 100")->fetch_all(MYSQLI_ASSOC);
-    
-    // Filter channels to only include those with at least one active, visible source with valid URL
+    ensureLiveTvChannelsSchema($conn);
+    $all_channels = $conn->query(
+        "SELECT * FROM live_tv_channels
+         WHERE is_active = 1
+           AND COALESCE(featured, 0) = 1
+           AND (sources IS NOT NULL AND sources != '' AND sources != '[]' AND sources != 'null')
+           AND sources LIKE '%\"url\"%'
+         ORDER BY views DESC, created_at DESC"
+    )->fetch_all(MYSQLI_ASSOC);
+
     foreach ($all_channels as $channel) {
-        $active_source_count = countActiveSources($channel);
-        if ($active_source_count > 0) {
-            $live_tv_channels[] = $channel;
-            // Limit to 12 channels for homepage
-            if (count($live_tv_channels) >= 12) {
-                break;
-            }
+        if (countActiveSources($channel) > 0) {
+            $featured_live_tv_channels[] = $channel;
         }
     }
 }
@@ -172,6 +174,67 @@ include 'includes/header.php';
     background: linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0.2) 100%);
     z-index: 1;
 }
+.hero-type-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.45rem 1.25rem;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.72), rgba(0,0,0,0.35));
+    pointer-events: none;
+}
+@media (min-width: 768px) {
+    .hero-type-bar {
+        padding: 0.55rem 3rem;
+        gap: 0.45rem;
+    }
+}
+.hero-type-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #fff;
+    background: rgba(229, 9, 20, 0.95);
+    border-radius: 0.2rem;
+    padding: 0.28rem 0.65rem;
+    line-height: 1.2;
+}
+.hero-type-pill.tv-show {
+    background: rgba(37, 99, 235, 0.95);
+}
+.hero-type-pill.live-tv {
+    background: rgba(16, 185, 129, 0.95);
+}
+.hero-type-pill.external {
+    background: rgba(107, 114, 128, 0.95);
+}
+.hero-type-pill.tag {
+    background: rgba(0, 0, 0, 0.75);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.45);
+    letter-spacing: 0.04em;
+}
+.hero-type-pill.quality {
+    background: rgba(245, 158, 11, 0.95);
+    color: #111;
+    border: 1px solid rgba(251, 191, 36, 0.5);
+}
+@media (min-width: 640px) {
+    .hero-type-pill {
+        font-size: 0.75rem;
+        padding: 0.32rem 0.75rem;
+    }
+}
 .home-page .hero-section::after {
     content: '';
     position: absolute;
@@ -182,13 +245,15 @@ include 'includes/header.php';
 .home-page .hero-content {
     position: relative;
     z-index: 10;
-    max-width: 42rem;
+    width: 100%;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
     gap: 1rem;
 }
 @media (min-width: 640px) {
     .home-page .hero-content {
+        max-width: 42rem;
         gap: 1.25rem;
     }
 }
@@ -278,9 +343,7 @@ include 'includes/header.php';
         padding: 0 3rem;
     }
 }
-.section-header-row .movie-row-title,
-.section-header-row .live-tv-section-title,
-.section-header-row .tv-shows-section-title {
+.section-header-row .movie-row-title {
     padding: 0;
     margin: 0;
 }
@@ -370,7 +433,7 @@ include 'includes/header.php';
     padding-top: 0.75rem;
     margin-top: 0.25rem;
     width: 100%;
-    max-width: 22rem;
+    max-width: none;
 }
 @media (min-width: 640px) {
     .hero-actions {
@@ -395,13 +458,14 @@ include 'includes/header.php';
     justify-content: center;
     gap: 0.5rem;
     width: 100%;
+    max-width: none;
     box-sizing: border-box;
-    padding: 0.65rem 1rem;
+    padding: 0.75rem 1rem;
     border-radius: 0.25rem;
     font-weight: 700;
     text-decoration: none;
     transition: background 0.2s;
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
 }
 .btn-play-hero {
     background: #fff;
@@ -551,6 +615,9 @@ include 'includes/header.php';
     box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
     z-index: 10;
     background: #1a1a1a;
+    display: block;
+    text-decoration: none;
+    color: inherit;
 }
 @media (min-width: 768px) {
     .movie-card {
@@ -560,6 +627,8 @@ include 'includes/header.php';
 .movie-card:hover {
     transform: scale(1.05);
     z-index: 20;
+    text-decoration: none;
+    color: inherit;
 }
 .movie-card img {
     width: 100%;
@@ -644,148 +713,34 @@ include 'includes/header.php';
     box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
 
-/* TV Show cards on home (use 16:9 and contain so YouTube-style banners are not cropped) */
-.movie-row-tv .movie-card {
-    aspect-ratio: 16/9;
+/* Featured Live TV — horizontal scroll like Featured Movies, live-tv card look */
+.movie-row-live .live-tv-channel-card {
+    flex: none;
     width: 190px;
-}
-@media (min-width: 768px) {
-    .movie-row-tv .movie-card {
-        width: 260px;
-    }
-}
-.movie-row-tv .movie-card img {
-    object-fit: contain;
-    background: #000;
-}
-.movie-row-tv .tv-show-card-title {
-    margin-top: 0.35rem;
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: #e5e7eb;
-    text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* TV Shows Section on index - grid 3 per row, 2 rows (6 total), not slider */
-.tv-shows-section {
-    padding: 0 1.5rem;
-}
-@media (min-width: 768px) {
-    .tv-shows-section {
-        padding: 0 3rem;
-    }
-}
-.tv-shows-section-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-.tv-shows-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-}
-.tv-shows-grid .tv-show-card-wrap {
-    position: relative;
-    background: #141414;
-    border-radius: 0.5rem;
-    overflow: hidden;
-    display: block;
-    text-decoration: none;
-    color: inherit;
-}
-.tv-shows-grid .tv-show-card-wrap:hover {
-    text-decoration: none;
-    color: inherit;
-}
-.tv-shows-grid .tv-show-poster {
-    aspect-ratio: 16/9;
-    width: 100%;
-    object-fit: contain;
-    background: #000;
-    display: block;
-}
-.tv-shows-grid .tv-show-card-title {
-    padding: 0.75rem;
-    font-weight: 600;
-    font-size: 0.875rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: #fff;
-}
-
-/* Live TV Section */
-.live-tv-section {
-    padding: 0 1.5rem;
-}
-@media (min-width: 768px) {
-    .live-tv-section {
-        padding: 0 3rem;
-    }
-}
-.live-tv-section-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-.live-tv-section .section-header-row {
-    margin-bottom: 1rem;
-}
-.live-tv-channels-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-}
-@media (min-width: 640px) {
-    .live-tv-channels-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-@media (min-width: 768px) {
-    .live-tv-channels-grid {
-        grid-template-columns: repeat(4, 1fr);
-    }
-}
-@media (min-width: 1024px) {
-    .live-tv-channels-grid {
-        grid-template-columns: repeat(5, 1fr);
-    }
-}
-@media (min-width: 1280px) {
-    .live-tv-channels-grid {
-        grid-template-columns: repeat(5, 1fr);
-    }
-}
-.live-tv-channel-card {
     position: relative;
     background: #141414;
     border-radius: 0.5rem;
     overflow: hidden;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: transform 0.2s;
     border: 2px solid transparent;
     display: block;
     text-decoration: none;
     color: inherit;
+    z-index: 10;
 }
-.live-tv-channel-card:hover {
+@media (min-width: 768px) {
+    .movie-row-live .live-tv-channel-card {
+        width: 220px;
+    }
+}
+.movie-row-live .live-tv-channel-card:hover {
     text-decoration: none;
     color: inherit;
-}
-.live-tv-channel-card:hover {
     transform: scale(1.05);
+    z-index: 20;
 }
-.live-tv-channel-logo {
+.movie-row-live .live-tv-channel-logo {
     height: 110px;
     background: linear-gradient(to bottom right, rgba(229,9,20,0.2), rgba(37,99,235,0.2));
     display: flex;
@@ -793,7 +748,7 @@ include 'includes/header.php';
     justify-content: center;
     position: relative;
 }
-.live-tv-channel-logo img {
+.movie-row-live .live-tv-channel-logo img {
     max-width: 100%;
     max-height: 100%;
     width: auto;
@@ -801,7 +756,7 @@ include 'includes/header.php';
     object-fit: contain;
     padding: 0.5rem;
 }
-.live-tv-channel-overlay {
+.movie-row-live .live-tv-channel-overlay {
     position: absolute;
     inset: 0;
     background: rgba(0,0,0,0.6);
@@ -811,10 +766,10 @@ include 'includes/header.php';
     align-items: center;
     justify-content: center;
 }
-.live-tv-channel-card:hover .live-tv-channel-overlay {
+.movie-row-live .live-tv-channel-card:hover .live-tv-channel-overlay {
     opacity: 1;
 }
-.live-tv-channel-play-icon {
+.movie-row-live .live-tv-channel-play-icon {
     background: #e50914;
     border-radius: 50%;
     padding: 0.75rem;
@@ -823,7 +778,7 @@ include 'includes/header.php';
     align-items: center;
     justify-content: center;
 }
-.live-tv-channel-badge {
+.movie-row-live .live-tv-channel-badge {
     position: absolute;
     top: 0.5rem;
     right: 0.5rem;
@@ -835,33 +790,47 @@ include 'includes/header.php';
     border-radius: 0.25rem;
     z-index: 10;
 }
-.live-tv-channel-card.premium {
-    border: 2px solid rgba(251, 191, 36, 0.6);
-    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+.movie-row-live .live-tv-channel-tags {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    right: 3.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    z-index: 10;
+    pointer-events: none;
 }
-.live-tv-channel-card.premium:hover {
-    border-color: rgba(251, 191, 36, 0.9);
-    box-shadow: 0 6px 16px rgba(251, 191, 36, 0.4);
+.movie-row-live .live-tv-channel-tag {
+    background: rgba(0,0,0,0.75);
+    color: #fbbf24;
+    border: 1px solid rgba(251,191,36,0.4);
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.2rem;
+    text-transform: uppercase;
+    line-height: 1.2;
 }
-.live-tv-channel-card.free {
-    border: 2px solid rgba(16, 185, 129, 0.4);
+.movie-row-live .live-tv-channel-card.premium {
+    border-color: rgba(251, 191, 36, 0.6);
 }
-.live-tv-channel-card.free:hover {
-    border-color: rgba(16, 185, 129, 0.6);
+.movie-row-live .live-tv-channel-card.free {
+    border-color: rgba(16, 185, 129, 0.4);
 }
-.live-tv-channel-info {
+.movie-row-live .live-tv-channel-info {
     padding: 0.75rem;
 }
-.live-tv-channel-info h3 {
+.movie-row-live .live-tv-channel-info h3 {
     font-weight: 600;
     font-size: 0.875rem;
-    margin-bottom: 0.25rem;
+    margin: 0 0 0.25rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     color: #fff;
 }
-.live-tv-channel-info p {
+.movie-row-live .live-tv-channel-info p {
     font-size: 0.75rem;
     color: #9ca3af;
     margin-bottom: 0.5rem;
@@ -870,7 +839,7 @@ include 'includes/header.php';
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
-.live-tv-channel-meta {
+.movie-row-live .live-tv-channel-meta {
     font-size: 0.7rem;
     color: #fff;
     margin-top: 0.25rem;
@@ -879,10 +848,10 @@ include 'includes/header.php';
     gap: 0.5rem;
     flex-wrap: wrap;
 }
-.live-tv-channel-meta span {
+.movie-row-live .live-tv-channel-meta span {
     white-space: nowrap;
 }
-.live-tv-channel-source-count {
+.movie-row-live .live-tv-channel-source-count {
     display: flex;
     align-items: center;
     gap: 0.25rem;
@@ -890,7 +859,7 @@ include 'includes/header.php';
     color: #9ca3af;
     margin-top: 0.25rem;
 }
-.live-tv-channel-source-count svg {
+.movie-row-live .live-tv-channel-source-count svg {
     width: 14px;
     height: 14px;
     fill: currentColor;
@@ -908,11 +877,31 @@ include 'includes/header.php';
                 $heroPlayUrl = $heroSlide['play_url'] ?? '#';
                 $heroInfoUrl = $heroSlide['info_url'] ?? $heroPlayUrl;
                 $heroPlayLabel = $heroSlide['play_label'] ?? 'Play';
+                $heroLinkType = $heroSlide['link_type'] ?? 'external';
+                $heroTypeLabels = [
+                    'movie' => 'Movie',
+                    'tv_show' => 'TV Show',
+                    'live_tv' => 'Live TV',
+                    'external' => 'Featured',
+                ];
+                $heroTypeLabel = $heroTypeLabels[$heroLinkType] ?? 'Featured';
+                $heroTypeClass = str_replace('_', '-', $heroLinkType);
+                $heroTags = is_array($heroSlide['tags'] ?? null) ? $heroSlide['tags'] : [];
+                $heroQuality = trim((string) ($heroSlide['quality'] ?? ''));
                 ?>
                 <div class="hero-section hero-slide" data-hero-index="<?php echo $slideIndex; ?>">
                     <?php if ($heroImage !== ''): ?>
                     <img src="<?php echo $heroImage; ?>" alt="<?php echo htmlspecialchars($heroSlide['title'] ?? ''); ?>" class="hero-bg-image" onerror="this.style.display='none'">
                     <?php endif; ?>
+                    <div class="hero-type-bar" aria-label="Content type">
+                        <span class="hero-type-pill <?php echo htmlspecialchars($heroTypeClass); ?>"><?php echo htmlspecialchars($heroTypeLabel); ?></span>
+                        <?php if ($heroQuality !== ''): ?>
+                        <span class="hero-type-pill quality"><?php echo htmlspecialchars($heroQuality); ?></span>
+                        <?php endif; ?>
+                        <?php foreach (array_slice($heroTags, 0, 3) as $heroTag): ?>
+                        <span class="hero-type-pill tag"><?php echo htmlspecialchars($heroTag); ?></span>
+                        <?php endforeach; ?>
+                    </div>
                     <div class="hero-content">
                         <div class="hero-badge">
                             <svg viewBox="0 0 24 24" fill="currentColor">
@@ -975,7 +964,7 @@ include 'includes/header.php';
                 <div class="section-header-row">
                     <h2 class="movie-row-title">✨ Featured Movies</h2>
                     <a href="<?php echo BASE_URL; ?>/movies" class="section-view-all">
-                        View All <i class="fas fa-arrow-right ml-1"></i>
+                        Show all Movies <i class="fas fa-arrow-right ml-1"></i>
                     </a>
                 </div>
                 <div class="movie-row-container">
@@ -988,9 +977,9 @@ include 'includes/header.php';
                         <?php foreach ($featured_movies as $movie): ?>
                             <?php
                             $movieAccess = getMovieAccess($conn, $movie);
-                            $moviePlayUrl = resolveMovieWatchHref($movie, $movieAccess, 0, $conn);
+                            $movieDetailUrl = getMovieDetailUrl($movie, $conn);
                             ?>
-                            <div class="movie-card" onclick="window.location.href='<?php echo htmlspecialchars($moviePlayUrl, ENT_QUOTES); ?>'">
+                            <a href="<?php echo htmlspecialchars($movieDetailUrl); ?>" class="movie-card">
                                 <?php renderMoviePosterBadges($movie); ?>
                                 <img src="<?php echo htmlspecialchars(moviePosterUrl($movie)); ?>" 
                                      alt="<?php echo htmlspecialchars($movie['title']); ?>" 
@@ -1016,7 +1005,7 @@ include 'includes/header.php';
                                         <?php endif; ?>
                                     </div>
                                 </div>
-                            </div>
+                            </a>
                         <?php endforeach; ?>
                     </div>
                     <button class="movie-row-btn movie-row-btn-right" onclick="slideRow(this, 'right')">
@@ -1044,7 +1033,7 @@ include 'includes/header.php';
                             $movieAccess = getMovieAccess($conn, $movie);
                             $moviePlayUrl = resolveMovieWatchHref($movie, $movieAccess, 0, $conn);
                             ?>
-                            <div class="movie-card" onclick="window.location.href='<?php echo htmlspecialchars($moviePlayUrl, ENT_QUOTES); ?>'">
+                            <a href="<?php echo htmlspecialchars($moviePlayUrl); ?>" class="movie-card">
                                 <?php renderMoviePosterBadges($movie); ?>
                                 <img src="<?php echo htmlspecialchars(moviePosterUrl($movie)); ?>" 
                                      alt="<?php echo htmlspecialchars($movie['title']); ?>" 
@@ -1070,7 +1059,66 @@ include 'includes/header.php';
                                         <?php endif; ?>
                                     </div>
                                 </div>
-                            </div>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                    <button class="movie-row-btn movie-row-btn-right" onclick="slideRow(this, 'right')">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!-- Featured TV Shows — from Featured checkbox -->
+        <?php if (!empty($featured_tv_shows)): ?>
+            <div class="movie-row group/row">
+                <div class="section-header-row">
+                    <h2 class="movie-row-title">✨ Featured TV Shows</h2>
+                    <a href="<?php echo BASE_URL; ?>/tv-shows" class="section-view-all">
+                        Show all TV-Shows <i class="fas fa-arrow-right ml-1"></i>
+                    </a>
+                </div>
+                <div class="movie-row-container">
+                    <button class="movie-row-btn movie-row-btn-left" onclick="slideRow(this, 'left')">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                    <div class="movie-row-scroll" data-row="featured-tv">
+                        <?php foreach ($featured_tv_shows as $show): ?>
+                            <?php
+                            $show_url = !empty($show['slug'])
+                                ? BASE_URL . '/tv-show/' . rawurlencode($show['slug'])
+                                : BASE_URL . '/tv-show-detail?id=' . (int) $show['id'];
+                            $show_poster = moviePosterUrl($show);
+                            ?>
+                            <a href="<?php echo htmlspecialchars($show_url); ?>" class="movie-card">
+                                <?php renderMoviePosterBadges($show); ?>
+                                <img src="<?php echo htmlspecialchars($show_poster); ?>"
+                                     alt="<?php echo htmlspecialchars($show['title']); ?>"
+                                     loading="lazy"
+                                     onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
+                                <div class="movie-card-play-overlay">
+                                    <div class="movie-card-play-icon">
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="movie-card-info">
+                                    <h3><?php echo htmlspecialchars($show['title']); ?></h3>
+                                    <div class="meta">
+                                        <?php if (!empty($show['release_year'])): ?>
+                                        <span><?php echo (int) $show['release_year']; ?></span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($show['is_premium'])): ?>
+                                        <span><i class="fas fa-crown"></i> Premium</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </a>
                         <?php endforeach; ?>
                     </div>
                     <button class="movie-row-btn movie-row-btn-right" onclick="slideRow(this, 'right')">
@@ -1082,118 +1130,87 @@ include 'includes/header.php';
             </div>
         <?php endif; ?>
         
-        <!-- TV Shows - grid 3 per row, 2 rows (6 max), not slider; featured first -->
-        <?php if (!empty($tv_shows_for_index)): ?>
-            <div class="tv-shows-section">
-                <h2 class="tv-shows-section-title">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #e50914;">
-                        <rect width="20" height="15" x="2" y="4" rx="2" ry="2"></rect>
-                        <line x1="2" y1="12" x2="22" y2="12"></line>
-                    </svg>
-                    TV Shows
-                </h2>
-                <div class="tv-shows-grid">
-                    <?php foreach ($tv_shows_for_index as $show): ?>
-                        <?php
-                        $show_url = !empty($show['slug']) ? BASE_URL . '/tv-show/' . htmlspecialchars($show['slug']) : BASE_URL . '/tv-show-detail?id=' . $show['id'];
-                        ?>
-                        <a href="<?php echo $show_url; ?>" class="tv-show-card-wrap">
-                            <img src="<?php echo htmlspecialchars(assetUrl($show['poster'] ?? '') ?: FALLBACK_POSTER); ?>" 
-                                 alt="<?php echo htmlspecialchars($show['title']); ?>" 
-                                 class="tv-show-poster"
-                                 loading="lazy"
-                                 onerror="this.src='<?php echo FALLBACK_POSTER; ?>'">
-                            <div class="tv-show-card-title">
-                                <?php echo htmlspecialchars($show['title']); ?>
-                                <?php if (!empty($show['featured'])): ?>
-                                <span class="text-yellow-400 text-xs ml-1">⭐</span>
-                                <?php endif; ?>
-                            </div>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
-                <div style="text-align: center; margin-top: 1.5rem;">
-                    <a href="<?php echo BASE_URL; ?>/tv-shows" style="color: #e50914; text-decoration: none; font-weight: 600;">
-                        View More TV Shows →
-                    </a>
-                </div>
-            </div>
-        <?php endif; ?>
-        
-        <!-- Live TV Section -->
-        <?php if (!empty($live_tv_channels)): ?>
-            <div class="live-tv-section">
+        <!-- Featured Live TV — horizontal scroll like Featured Movies -->
+        <?php if (!empty($featured_live_tv_channels)): ?>
+            <div class="movie-row movie-row-live group/row">
                 <div class="section-header-row">
-                    <h2 class="live-tv-section-title">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #e50914;">
-                            <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
-                            <polyline points="17 2 12 7 7 2"></polyline>
-                        </svg>
-                        Live TV Channels
-                    </h2>
+                    <h2 class="movie-row-title">✨ Featured Live TV</h2>
                     <a href="<?php echo BASE_URL; ?>/live-tv" class="section-view-all">
-                        View All Live TV Channels <i class="fas fa-arrow-right ml-1"></i>
+                        Show All Live TV Channels <i class="fas fa-arrow-right ml-1"></i>
                     </a>
                 </div>
-                <div class="live-tv-channels-grid">
-                    <?php foreach (array_slice($live_tv_channels, 0, 12) as $channel): ?>
-                        <?php
-                            $channel_url = BASE_URL . (!empty($channel['slug']) ? '/tv/' . htmlspecialchars($channel['slug']) : '/tv/tv-channel.php?id=' . $channel['id']);
-                        ?>
-                        <a href="<?php echo htmlspecialchars($channel_url); ?>"
-                           class="live-tv-channel-card <?php echo (($channel['is_premium'] ?? 0) == 1) ? 'premium' : 'free'; ?>">
-                            <div class="live-tv-channel-logo">
-                                <?php if (!empty($channel['logo'])): ?>
-                                    <img src="<?php echo htmlspecialchars(assetUrl($channel['logo'])); ?>" alt="<?php echo htmlspecialchars($channel['name']); ?>" onerror="this.style.display='none'">
-                                <?php else: ?>
-                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">
-                                        <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
-                                        <polyline points="17 2 12 7 7 2"></polyline>
-                                    </svg>
-                                <?php endif; ?>
-                                <div class="live-tv-channel-overlay">
-                                    <div class="live-tv-channel-play-icon">
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                <div class="movie-row-container">
+                    <button type="button" class="movie-row-btn movie-row-btn-left" onclick="slideRow(this, 'left')" aria-label="Scroll left">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                    <div class="movie-row-scroll" data-row="featured-live-tv">
+                        <?php foreach ($featured_live_tv_channels as $channel): ?>
+                            <?php
+                            $channel_url = BASE_URL . (!empty($channel['slug'])
+                                ? '/tv/' . htmlspecialchars($channel['slug'])
+                                : '/tv/tv-channel.php?id=' . (int) $channel['id']);
+                            ?>
+                            <a href="<?php echo htmlspecialchars($channel_url); ?>"
+                               class="live-tv-channel-card <?php echo (($channel['is_premium'] ?? 0) == 1) ? 'premium' : 'free'; ?>">
+                                <div class="live-tv-channel-logo">
+                                    <?php if (!empty($channel['logo'])): ?>
+                                        <img src="<?php echo htmlspecialchars(assetUrl($channel['logo'])); ?>"
+                                             alt="<?php echo htmlspecialchars($channel['name']); ?>"
+                                             loading="lazy"
+                                             onerror="this.style.display='none'">
+                                    <?php else: ?>
+                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">
+                                            <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
+                                            <polyline points="17 2 12 7 7 2"></polyline>
                                         </svg>
+                                    <?php endif; ?>
+                                    <div class="live-tv-channel-overlay">
+                                        <div class="live-tv-channel-play-icon">
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                            </svg>
+                                        </div>
                                     </div>
+                                    <?php renderLiveTvChannelImageTags($channel); ?>
+                                    <div class="live-tv-channel-badge">LIVE</div>
                                 </div>
-                                <div class="live-tv-channel-badge">LIVE</div>
-                            </div>
-                            <div class="live-tv-channel-info">
-                                <h3><?php echo htmlspecialchars($channel['name']); ?></h3>
-                                <?php if (!empty($channel['description'])): ?>
-                                    <p><?php echo htmlspecialchars($channel['description']); ?></p>
-                                <?php endif; ?>
-                                <div class="live-tv-channel-meta">
-                                    <?php if (!empty($channel['category'])): ?>
-                                    <span><?php echo htmlspecialchars($channel['category']); ?></span>
+                                <div class="live-tv-channel-info">
+                                    <h3><?php echo htmlspecialchars($channel['name']); ?></h3>
+                                    <?php if (!empty($channel['description'])): ?>
+                                        <p><?php echo htmlspecialchars($channel['description']); ?></p>
                                     <?php endif; ?>
-                                    <?php if (!empty($channel['category']) && !empty($channel['country'])): ?>|<?php endif; ?>
-                                    <?php if (!empty($channel['country'])): ?>
-                                    <span><?php echo htmlspecialchars($channel['country']); ?></span>
+                                    <div class="live-tv-channel-meta">
+                                        <?php if (!empty($channel['category'])): ?>
+                                        <span><?php echo htmlspecialchars($channel['category']); ?></span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($channel['category']) && !empty($channel['country'])): ?>|<?php endif; ?>
+                                        <?php if (!empty($channel['country'])): ?>
+                                        <span><?php echo htmlspecialchars($channel['country']); ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php
+                                    $source_count = countActiveSources($channel);
+                                    if ($source_count > 0):
+                                    ?>
+                                    <div class="live-tv-channel-source-count">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
+                                            <polyline points="17 2 12 7 7 2"></polyline>
+                                        </svg>
+                                        <span><?php echo $source_count; ?> source<?php echo $source_count > 1 ? 's' : ''; ?></span>
+                                    </div>
                                     <?php endif; ?>
                                 </div>
-                                <?php
-                                $source_count = countActiveSources($channel);
-                                if ($source_count > 0):
-                                ?>
-                                <div class="live-tv-channel-source-count">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect width="20" height="15" x="2" y="7" rx="2" ry="2"></rect>
-                                        <polyline points="17 2 12 7 7 2"></polyline>
-                                    </svg>
-                                    <span><?php echo $source_count; ?> source<?php echo $source_count > 1 ? 's' : ''; ?></span>
-                                </div>
-                                <?php endif; ?>
-                            </div>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
-                <div style="text-align: center; margin-top: 1.5rem;">
-                    <a href="<?php echo BASE_URL; ?>/live-tv" style="color: #e50914; text-decoration: none; font-weight: 600;">
-                        View More TV Channels →
-                    </a>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                    <button type="button" class="movie-row-btn movie-row-btn-right" onclick="slideRow(this, 'right')" aria-label="Scroll right">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
                 </div>
             </div>
         <?php endif; ?>

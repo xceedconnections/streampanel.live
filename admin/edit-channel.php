@@ -4,8 +4,11 @@
  */
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/../includes/movies_schema.php';
+require_once __DIR__ . '/../includes/movie_helpers.php';
 $page_title = "Edit Live TV Channel";
 $conn = getDBConnection();
+ensureLiveTvChannelsSchema($conn);
 
 $message = '';
 $message_type = '';
@@ -58,6 +61,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $featured = isset($_POST['featured']) ? 1 : 0;
     $is_active = isset($_POST['is_active']) ? 1 : 0;
     $show_in_slider = (int) ($edit_channel['show_in_slider'] ?? 0);
+    $tags = encodeMovieTagsInput($_POST['tags'] ?? '');
+    $quality_label = sanitize($_POST['quality_label'] ?? '');
     
     // Handle free/premium - mutually exclusive (radio button)
     $content_type = $_POST['content_type'] ?? 'free';
@@ -165,10 +170,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Update channel
     // Note: loop_interval is now taken from the ad's duration, so we set it to NULL
     // Intro ad is controlled globally from ads page, not per-channel - removed intro_ad_id
-    $stmt = $conn->prepare("UPDATE live_tv_channels SET name=?, description=?, logo=?, category=?, country=?, language=?, featured=?, is_active=?, is_free=?, is_premium=?, show_in_slider=?, slug=?, sources=?, pre_roll_ad_id=?, mid_roll_ad_id=?, end_roll_ad_id=?, loop_ad_id=?, loop_interval=?, banner_ad_id=?, popup_ad_id=? WHERE id=?");
+    $stmt = $conn->prepare("UPDATE live_tv_channels SET name=?, description=?, logo=?, category=?, country=?, language=?, featured=?, is_active=?, is_free=?, is_premium=?, show_in_slider=?, slug=?, sources=?, tags=?, quality_label=?, pre_roll_ad_id=?, mid_roll_ad_id=?, end_roll_ad_id=?, loop_ad_id=?, loop_interval=?, banner_ad_id=?, popup_ad_id=? WHERE id=?");
     if ($stmt) {
-        // Type string: 6 strings (name, description, logo, category, country, language) + 5 ints (featured, is_active, is_free, is_premium, show_in_slider) + 2 strings (slug, sources) + 8 ints (pre_roll_ad_id, mid_roll_ad_id, end_roll_ad_id, loop_ad_id, loop_interval, banner_ad_id, popup_ad_id, channel_id) = 21 total
-        $stmt->bind_param("ssssssiiiiissiiiiiiii", $name, $description, $logo, $category, $country, $language, $featured, $is_active, $is_free, $is_premium, $show_in_slider, $slug, $sourcesJson, $pre_roll_ad_id, $mid_roll_ad_id, $end_roll_ad_id, $loop_ad_id, $loop_interval, $banner_ad_id, $popup_ad_id, $channel_id);
+        // 6s + 5i + 2s + tags + quality + 7 ads + id
+        $stmt->bind_param("ssssssiiiiissssiiiiiiii", $name, $description, $logo, $category, $country, $language, $featured, $is_active, $is_free, $is_premium, $show_in_slider, $slug, $sourcesJson, $tags, $quality_label, $pre_roll_ad_id, $mid_roll_ad_id, $end_roll_ad_id, $loop_ad_id, $loop_interval, $banner_ad_id, $popup_ad_id, $channel_id);
         if ($stmt->execute()) {
             $message = 'Channel updated successfully';
             $message_type = 'success';
@@ -232,6 +237,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                        class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white" 
                        placeholder="e.g., Movies, News, Sports, Entertainment">
             </div>
+            <div>
+                <label class="block text-sm font-semibold mb-2">Tags (shown on image)</label>
+                <input type="text" name="tags" value="<?php echo htmlspecialchars(implode(', ', parseMovieTags($edit_channel['tags'] ?? ''))); ?>"
+                       placeholder="HD, Sports, Urdu"
+                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                <p class="text-xs text-gray-400 mt-1">Comma-separated tags displayed on the channel card image (homepage Featured Live TV).</p>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold mb-2">Quality Badge</label>
+                <select name="quality_label" class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                    <option value="">None</option>
+                    <?php foreach (['SD', 'HD', 'FHD', 'UHD', '4K', 'Low Quality', 'High Quality'] as $ql): ?>
+                    <option value="<?php echo $ql; ?>" <?php echo ($edit_channel['quality_label'] ?? '') === $ql ? 'selected' : ''; ?>><?php echo $ql; ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="text-xs text-gray-400 mt-1">Shown on homepage slider. Leave None to hide quality.</p>
+            </div>
         </div>
         
         <div class="mb-4">
@@ -242,33 +264,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-                <label class="block text-sm font-semibold mb-2">Logo</label>
+                <label class="block text-sm font-semibold mb-2">Logo / Channel Image</label>
                 <div class="space-y-2">
-                    <input type="file" name="logo_file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" 
-                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm">
-                    <p class="text-xs text-gray-400">Upload logo (JPG, PNG, GIF, WEBP)</p>
-                    <?php if (!empty($edit_channel['logo'])): 
-                        // Fix logo path if it contains /api
-                        $logo_display = $edit_channel['logo'];
-                        if (strpos($logo_display, '/api/') !== false) {
-                            $logo_display = str_replace('/api/', '/', $logo_display);
-                            $logo_display = str_replace('/api', '', $logo_display);
-                            // Update in database if incorrect
-                            $fix_logo = $conn->prepare("UPDATE live_tv_channels SET logo = ? WHERE id = ?");
-                            $fix_logo->bind_param("si", $logo_display, $edit_channel['id']);
-                            $fix_logo->execute();
-                            $edit_channel['logo'] = $logo_display; // Update for form field too
-                        }
+                    <?php
+                    $logo_display = $edit_channel['logo'] ?? '';
+                    if ($logo_display !== '' && strpos($logo_display, '/api/') !== false) {
+                        $logo_display = str_replace('/api/', '/', $logo_display);
+                        $logo_display = str_replace('/api', '', $logo_display);
+                        $fix_logo = $conn->prepare("UPDATE live_tv_channels SET logo = ? WHERE id = ?");
+                        $fix_logo->bind_param("si", $logo_display, $edit_channel['id']);
+                        $fix_logo->execute();
+                        $edit_channel['logo'] = $logo_display;
+                    }
+                    $logo_preview_src = $logo_display !== '' ? assetUrl($logo_display) : '';
                     ?>
-                    <div class="mt-2">
-                        <img src="<?php echo htmlspecialchars($logo_display); ?>" alt="Current Logo" 
-                             class="max-w-24 max-h-24 object-contain bg-gray-800 rounded p-2" 
-                             onerror="this.style.display='none'">
+                    <div id="channel-logo-preview-wrap" class="mt-1 <?php echo $logo_preview_src === '' ? 'hidden' : ''; ?>">
+                        <div class="inline-flex items-center justify-center bg-black border border-gray-700 rounded-lg p-3" style="min-width: 160px; min-height: 110px;">
+                            <img id="channel-logo-preview" src="<?php echo htmlspecialchars($logo_preview_src); ?>"
+                                 alt="Channel logo preview"
+                                 class="max-h-28 max-w-full object-contain"
+                                 onerror="this.style.display='none'; document.getElementById('channel-logo-preview-wrap').classList.add('hidden');">
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">Image preview</p>
                     </div>
-                    <?php endif; ?>
-                    <input type="text" name="logo" value="<?php echo htmlspecialchars($edit_channel['logo'] ?? ''); ?>" 
-                           placeholder="Or enter logo URL" 
-                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm mt-2">
+                    <input type="file" name="logo_file" id="channel-logo-file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm"
+                           onchange="previewChannelLogoFile(this)">
+                    <p class="text-xs text-gray-400">Upload logo (JPG, PNG, GIF, WEBP)</p>
+                    <input type="text" name="logo" id="channel-logo-url" value="<?php echo htmlspecialchars($edit_channel['logo'] ?? ''); ?>"
+                           placeholder="Or enter logo URL"
+                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm mt-2"
+                           oninput="previewChannelLogoUrl(this.value)">
                 </div>
             </div>
             <div>
@@ -669,5 +695,36 @@ function validateChannelForm() {
     // could not be deleted. Now we simply allow submit and (optionally) rely
     // on server&#8209;side/UX messaging if needed.
     return true;
+}
+
+function previewChannelLogoUrl(url) {
+    const wrap = document.getElementById('channel-logo-preview-wrap');
+    const img = document.getElementById('channel-logo-preview');
+    if (!wrap || !img) return;
+    url = (url || '').trim();
+    if (!url) {
+        wrap.classList.add('hidden');
+        img.removeAttribute('src');
+        img.style.display = 'none';
+        return;
+    }
+    img.style.display = '';
+    img.src = url;
+    wrap.classList.remove('hidden');
+}
+
+function previewChannelLogoFile(input) {
+    const wrap = document.getElementById('channel-logo-preview-wrap');
+    const img = document.getElementById('channel-logo-preview');
+    if (!wrap || !img || !input.files || !input.files[0]) return;
+    const file = input.files[0];
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        img.style.display = '';
+        img.src = e.target.result;
+        wrap.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
 }
 </script>

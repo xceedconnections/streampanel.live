@@ -4,8 +4,11 @@
  */
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/../includes/movies_schema.php';
+require_once __DIR__ . '/../includes/movie_helpers.php';
 $page_title = "Manage Live TV";
 $conn = getDBConnection();
+ensureLiveTvChannelsSchema($conn);
 
 $message = '';
 $message_type = '';
@@ -105,6 +108,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['bulk_action'])) {
     $featured = isset($_POST['featured']) ? 1 : 0;
     $is_active = isset($_POST['is_active']) ? 1 : 0;
     $show_in_slider = isset($_POST['show_in_slider']) ? 1 : 0;
+    $tags = encodeMovieTagsInput($_POST['tags'] ?? '');
+    $quality_label = sanitize($_POST['quality_label'] ?? '');
     
     // Handle free/premium - mutually exclusive (radio button)
     $content_type = $_POST['content_type'] ?? 'free'; // 'free' or 'premium'
@@ -207,9 +212,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['bulk_action'])) {
     
     if ($id) {
         // Update
-        $stmt = $conn->prepare("UPDATE live_tv_channels SET name=?, description=?, logo=?, stream_url=?, category=?, country=?, language=?, featured=?, is_active=?, is_free=?, is_premium=?, show_in_slider=?, slug=?, sources=? WHERE id=?");
+        $stmt = $conn->prepare("UPDATE live_tv_channels SET name=?, description=?, logo=?, stream_url=?, category=?, country=?, language=?, featured=?, is_active=?, is_free=?, is_premium=?, show_in_slider=?, slug=?, sources=?, tags=?, quality_label=? WHERE id=?");
         if ($stmt) {
-            $stmt->bind_param("sssssssiiisssi", $name, $description, $logo, $stream_url_for_db, $category, $country, $language, $featured, $is_active, $is_free, $is_premium, $show_in_slider, $slug, $sourcesJson, $id);
+            $stmt->bind_param("sssssssiiiiissssi", $name, $description, $logo, $stream_url_for_db, $category, $country, $language, $featured, $is_active, $is_free, $is_premium, $show_in_slider, $slug, $sourcesJson, $tags, $quality_label, $id);
             if ($stmt->execute()) {
                 $message = 'Channel updated successfully';
             } else {
@@ -222,9 +227,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['bulk_action'])) {
         }
     } else {
         // Insert - stream_url can be empty if no sources provided
-        $stmt = $conn->prepare("INSERT INTO live_tv_channels (name, description, logo, stream_url, category, country, language, featured, is_active, is_free, is_premium, show_in_slider, slug, sources) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt = $conn->prepare("INSERT INTO live_tv_channels (name, description, logo, stream_url, category, country, language, featured, is_active, is_free, is_premium, show_in_slider, slug, sources, tags, quality_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         if ($stmt) {
-            $stmt->bind_param("sssssssiiissss", $name, $description, $logo, $stream_url_for_db, $category, $country, $language, $featured, $is_active, $is_free, $is_premium, $show_in_slider, $slug, $sourcesJson);
+            $stmt->bind_param("sssssssiiiiissss", $name, $description, $logo, $stream_url_for_db, $category, $country, $language, $featured, $is_active, $is_free, $is_premium, $show_in_slider, $slug, $sourcesJson, $tags, $quality_label);
             if ($stmt->execute()) {
                 $message = 'Channel added successfully';
             } else {
@@ -393,6 +398,23 @@ $edit_channel = null;
                        class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white" 
                        placeholder="e.g., Movies, News, Sports, Entertainment">
             </div>
+            <div>
+                <label class="block text-sm font-semibold mb-2">Tags (shown on image)</label>
+                <input type="text" name="tags" value=""
+                       placeholder="HD, Sports, Urdu"
+                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                <p class="text-xs text-gray-400 mt-1">Comma-separated tags displayed on the channel card image.</p>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold mb-2">Quality Badge</label>
+                <select name="quality_label" class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                    <option value="">None</option>
+                    <?php foreach (['SD', 'HD', 'FHD', 'UHD', '4K', 'Low Quality', 'High Quality'] as $ql): ?>
+                    <option value="<?php echo $ql; ?>"><?php echo $ql; ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="text-xs text-gray-400 mt-1">Shown on homepage slider. Leave None to hide quality.</p>
+            </div>
         </div>
         
         <div class="mb-4">
@@ -403,14 +425,24 @@ $edit_channel = null;
         
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-                <label class="block text-sm font-semibold mb-2">Logo</label>
+                <label class="block text-sm font-semibold mb-2">Logo / Channel Image</label>
                 <div class="space-y-2">
-                    <input type="file" name="logo_file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" 
-                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm">
+                    <div id="channel-logo-preview-wrap" class="mt-1 hidden">
+                        <div class="inline-flex items-center justify-center bg-black border border-gray-700 rounded-lg p-3" style="min-width: 160px; min-height: 110px;">
+                            <img id="channel-logo-preview" src="" alt="Channel logo preview"
+                                 class="max-h-28 max-w-full object-contain"
+                                 onerror="this.style.display='none'; document.getElementById('channel-logo-preview-wrap').classList.add('hidden');">
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">Image preview</p>
+                    </div>
+                    <input type="file" name="logo_file" id="channel-logo-file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm"
+                           onchange="previewChannelLogoFile(this)">
                     <p class="text-xs text-gray-400">Upload logo (JPG, PNG, GIF, WEBP)</p>
-                    <input type="text" name="logo" value="" 
-                           placeholder="Or enter logo URL" 
-                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm mt-2">
+                    <input type="text" name="logo" id="channel-logo-url" value=""
+                           placeholder="Or enter logo URL"
+                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm mt-2"
+                           oninput="previewChannelLogoUrl(this.value)">
                 </div>
             </div>
             <div>
@@ -879,6 +911,37 @@ function removeSource(btn) {
     if (confirm('Remove this source?')) {
         btn.closest('.source-item').remove();
     }
+}
+
+function previewChannelLogoUrl(url) {
+    const wrap = document.getElementById('channel-logo-preview-wrap');
+    const img = document.getElementById('channel-logo-preview');
+    if (!wrap || !img) return;
+    url = (url || '').trim();
+    if (!url) {
+        wrap.classList.add('hidden');
+        img.removeAttribute('src');
+        img.style.display = 'none';
+        return;
+    }
+    img.style.display = '';
+    img.src = url;
+    wrap.classList.remove('hidden');
+}
+
+function previewChannelLogoFile(input) {
+    const wrap = document.getElementById('channel-logo-preview-wrap');
+    const img = document.getElementById('channel-logo-preview');
+    if (!wrap || !img || !input.files || !input.files[0]) return;
+    const file = input.files[0];
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        img.style.display = '';
+        img.src = e.target.result;
+        wrap.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
 }
 
 function validateChannelForm() {

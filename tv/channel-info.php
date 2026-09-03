@@ -344,10 +344,6 @@ if ($channel) {
                                 </span>
                             </span>
                         </button>
-
-                        <p class="text-xs sm:text-sm text-gray-300 max-w-xs">
-                            You may be asked to sign in before watching. Once logged in, you�ll be redirected straight to the live stream.
-                        </p>
                     </div>
                 </div>
             </div>

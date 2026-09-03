@@ -13,7 +13,7 @@
 if (!defined('BASE_URL')) {
     return;
 }
-if (!empty($minimal_site_footer) || !empty($hide_mobile_bottom_nav)) {
+if (!empty($hide_mobile_bottom_nav)) {
     return;
 }
 
@@ -30,9 +30,9 @@ $enable_live_tv = $enable_live_tv ?? (function_exists('isSectionEnabled') && iss
 $nav_script = $_SERVER['SCRIPT_NAME'] ?? '';
 $nav_uri = $_SERVER['REQUEST_URI'] ?? '';
 $is_nav_home = (basename($nav_script) === 'index.php' && strpos($nav_uri, '/movies') === false && strpos($nav_uri, '/tv-shows') === false && strpos($nav_uri, '/live-tv') === false && strpos($nav_uri, '/search') === false);
+$is_nav_live_tv = (strpos($nav_uri, '/live-tv') !== false || strpos($nav_uri, '/watch-live-tv') !== false || preg_match('#/tv/[^/]+#', $nav_uri));
 $is_nav_movies = (strpos($nav_uri, '/movies') !== false);
-$is_nav_tv_shows = (strpos($nav_uri, '/tv-shows') !== false);
-$is_nav_live_tv = (strpos($nav_uri, '/live-tv') !== false || strpos($nav_uri, '/watch-live-tv') !== false);
+$is_nav_tv_shows = (strpos($nav_uri, '/tv-shows') !== false || strpos($nav_uri, '/tv-show/') !== false || strpos($nav_uri, '/watch-tv-show/') !== false);
 $is_nav_search = (strpos($nav_uri, '/search') !== false);
 
 if ($stream_mobile_nav_mode === 'css' || $stream_mobile_nav_mode === 'full'):

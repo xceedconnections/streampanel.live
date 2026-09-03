@@ -223,6 +223,8 @@ function getHomeHeroSlides($conn): array
             $playUrl = '#';
             $infoUrl = '#';
             $playLabel = 'Play';
+            $tags = [];
+            $quality = '';
 
             if ($type === 'movie' && !empty($slide['link_id'])) {
                 $movie = getMovieById($conn, (int) $slide['link_id']);
@@ -242,25 +244,47 @@ function getHomeHeroSlides($conn): array
                     if (empty($access['allowed'])) {
                         $playLabel = ($access['reason'] ?? '') === 'login' ? 'Sign In to Play' : 'Premium Required';
                     }
+                    $tags = parseMovieTags($movie['tags'] ?? '');
+                    if (empty($tags)) {
+                        $cat = trim((string) ($movie['category_name'] ?? ''));
+                        if ($cat !== '') {
+                            $tags = [$cat];
+                        }
+                    }
+                    $qualities = getMovieQualityBadges($movie);
+                    $quality = $qualities[0] ?? '';
                 } else {
                     continue; // skip inactive/missing movies
                 }
             } elseif ($type === 'tv_show' && !empty($slide['link_id'])) {
                 $show = getTVShowById($conn, (int) $slide['link_id']);
-                if ($show) {
+                if ($show && (int) ($show['is_active'] ?? 1) === 1) {
                     if ($title === '') {
                         $title = (string) ($show['title'] ?? '');
                     }
                     if ($description === '') {
                         $description = (string) ($show['description'] ?? '');
                     }
-                    if ($image === '' && !empty($show['poster'])) {
-                        $image = $show['poster'];
-                    } elseif ($image === '' && !empty($show['thumbnail'])) {
-                        $image = $show['thumbnail'];
+                    // Prefer Banner / Backdrop for homepage hero (wide image)
+                    $tvBanner = trim((string) ($show['backdrop'] ?? ''));
+                    if ($tvBanner === '') {
+                        $tvBanner = trim((string) ($show['thumbnail'] ?? ''));
+                    }
+                    if ($tvBanner !== '') {
+                        $image = $tvBanner;
+                    } elseif ($image === '' && !empty($show['poster'])) {
+                        $image = (string) $show['poster'];
                     }
                     $playUrl = getSlideLink($slide, $conn);
                     $infoUrl = $playUrl;
+                    $tags = parseMovieTags($show['tags'] ?? '');
+                    if (empty($tags)) {
+                        $cat = trim((string) ($show['category_name'] ?? ''));
+                        if ($cat !== '') {
+                            $tags = [$cat];
+                        }
+                    }
+                    $quality = trim((string) ($show['quality_label'] ?? ''));
                 } else {
                     continue;
                 }
@@ -278,6 +302,11 @@ function getHomeHeroSlides($conn): array
                     }
                     $playUrl = getSlideLink($slide, $conn);
                     $infoUrl = $playUrl;
+                    $tags = function_exists('getLiveTvChannelImageTags')
+                        ? getLiveTvChannelImageTags($channel)
+                        : [];
+                    // Channel-level quality only (slider). Empty = hide quality pill.
+                    $quality = trim((string) ($channel['quality_label'] ?? ''));
                 } else {
                     continue;
                 }
@@ -299,6 +328,8 @@ function getHomeHeroSlides($conn): array
                 'info_url' => $infoUrl,
                 'play_label' => $playLabel,
                 'link_type' => $type,
+                'tags' => array_values(array_unique(array_filter(array_map('trim', $tags)))),
+                'quality' => $quality,
             ];
         }
     }

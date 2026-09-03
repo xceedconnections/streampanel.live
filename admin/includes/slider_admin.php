@@ -449,7 +449,14 @@ function processSliderAdminRequests($conn)
                     $description = $show['description'];
                 }
                 if ($image_url === '') {
-                    $image_url = $show['poster'] ?? ($show['thumbnail'] ?? '');
+                    // Prefer Banner / Backdrop, then poster / thumbnail
+                    $image_url = trim((string) ($show['backdrop'] ?? ''));
+                    if ($image_url === '') {
+                        $image_url = trim((string) ($show['poster'] ?? ''));
+                    }
+                    if ($image_url === '') {
+                        $image_url = trim((string) ($show['thumbnail'] ?? ''));
+                    }
                 }
             }
         } elseif ($message_type !== 'error' && $link_type === 'live_tv' && $link_id) {

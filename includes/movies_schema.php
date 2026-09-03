@@ -46,6 +46,66 @@ function ensureMoviesSchema($conn): void
     repairInvalidMovieSlugs($conn);
 }
 
+/**
+ * Runtime schema upgrades for TV shows image/TMDB fields.
+ */
+function ensureTvShowsSchema($conn): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+
+    $columns = [
+        'backdrop' => "VARCHAR(500) NULL COMMENT 'TMDB banner/backdrop URL'",
+        'tmdb_id' => "INT NULL",
+        'trailer_url' => "VARCHAR(500) NULL",
+        'tags' => "TEXT NULL COMMENT 'JSON tags e.g. Hindi Dubbed'",
+        'quality_label' => "VARCHAR(50) NULL COMMENT 'Badge on poster e.g. HD'",
+    ];
+
+    foreach ($columns as $column => $definition) {
+        $check = $conn->query("SHOW COLUMNS FROM tv_shows LIKE '" . $conn->real_escape_string($column) . "'");
+        if ($check && $check->num_rows === 0) {
+            $conn->query("ALTER TABLE tv_shows ADD COLUMN `$column` $definition");
+        }
+    }
+
+    // Widen image URL columns so full TMDB links are stored
+    foreach (['poster', 'thumbnail', 'backdrop'] as $col) {
+        $info = $conn->query("SHOW COLUMNS FROM tv_shows LIKE '" . $conn->real_escape_string($col) . "'");
+        $row = $info ? $info->fetch_assoc() : null;
+        $type = strtolower($row['Type'] ?? '');
+        if ($type !== '' && (strpos($type, 'varchar(255)') !== false || strpos($type, 'varchar(191)') !== false)) {
+            $conn->query("ALTER TABLE tv_shows MODIFY COLUMN `$col` VARCHAR(500) NULL");
+        }
+    }
+
+    $done = true;
+}
+
+function ensureLiveTvChannelsSchema($conn): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+
+    $columns = [
+        'tags' => "TEXT NULL COMMENT 'JSON tags shown on channel card e.g. HD, Sports'",
+        'quality_label' => "VARCHAR(50) NULL COMMENT 'Channel quality badge e.g. HD, FHD, 4K'",
+    ];
+
+    foreach ($columns as $column => $definition) {
+        $check = $conn->query("SHOW COLUMNS FROM live_tv_channels LIKE '" . $conn->real_escape_string($column) . "'");
+        if ($check && $check->num_rows === 0) {
+            $conn->query("ALTER TABLE live_tv_channels ADD COLUMN `$column` $definition");
+        }
+    }
+
+    $done = true;
+}
+
 function repairInvalidMovieSlugs($conn): void
 {
     if (!function_exists('getUniqueSlug')) {

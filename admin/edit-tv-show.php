@@ -5,9 +5,12 @@
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/../includes/movies_schema.php';
+require_once __DIR__ . '/../includes/movie_helpers.php';
 
 $page_title = "Edit TV Show";
 $conn = getDBConnection();
+ensureTvShowsSchema($conn);
 
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $message = '';
@@ -28,8 +31,9 @@ if (!$show) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = sanitize($_POST['title'] ?? '');
     $description = sanitize($_POST['description'] ?? '');
-    $poster = sanitize($_POST['poster'] ?? '');
-    $thumbnail = sanitize($_POST['thumbnail'] ?? ($show['thumbnail'] ?? ''));
+    $poster = trim(strip_tags((string) ($_POST['poster'] ?? '')));
+    $backdrop = trim(strip_tags((string) ($_POST['backdrop'] ?? '')));
+    $thumbnail = trim(strip_tags((string) ($_POST['thumbnail'] ?? ($show['thumbnail'] ?? ''))));
     $release_year = intval($_POST['release_year'] ?? date('Y'));
     $rating = floatval($_POST['rating'] ?? 0);
     $tmdb_id = !empty($_POST['tmdb_id']) ? intval($_POST['tmdb_id']) : null;
@@ -38,23 +42,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $is_active = isset($_POST['is_active']) ? 1 : 0;
     $is_free = isset($_POST['is_free']) ? 1 : 0;
     $is_premium = isset($_POST['is_premium']) ? 1 : 0;
+    $quality_label = sanitize($_POST['quality_label'] ?? '');
+    $tags = encodeMovieTagsInput($_POST['tags'] ?? '');
+
+    $upload_dir = __DIR__ . '/../uploads/tv-show-logos/';
+    if (!is_dir($upload_dir)) {
+        mkdir($upload_dir, 0755, true);
+    }
+    $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
 
     // Handle poster upload
     if (isset($_FILES['poster_file']) && $_FILES['poster_file']['error'] === UPLOAD_ERR_OK) {
-        $upload_dir = __DIR__ . '/../uploads/tv-show-logos/';
-        if (!is_dir($upload_dir)) {
-            mkdir($upload_dir, 0755, true);
-        }
-
         $file_extension = strtolower(pathinfo($_FILES['poster_file']['name'], PATHINFO_EXTENSION));
-        $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-
-        if (in_array($file_extension, $allowed_extensions)) {
-            $file_name = 'tv_show_banner_' . time() . '_' . uniqid() . '.' . $file_extension;
-            $file_path = $upload_dir . $file_name;
-
-            if (move_uploaded_file($_FILES['poster_file']['tmp_name'], $file_path)) {
-                // Delete old poster if it was in our uploads folder
+        if (in_array($file_extension, $allowed_extensions, true)) {
+            $file_name = 'tv_show_poster_' . time() . '_' . uniqid() . '.' . $file_extension;
+            if (move_uploaded_file($_FILES['poster_file']['tmp_name'], $upload_dir . $file_name)) {
                 if (!empty($show['poster']) && strpos($show['poster'], 'uploads/tv-show-logos/') !== false) {
                     $old_file_path = str_replace(BASE_URL . '/', __DIR__ . '/../', $show['poster']);
                     if (file_exists($old_file_path)) {
@@ -62,6 +64,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 $poster = 'uploads/tv-show-logos/' . $file_name;
+            }
+        }
+    }
+
+    // Handle logo/thumbnail upload
+    if (isset($_FILES['thumbnail_file']) && $_FILES['thumbnail_file']['error'] === UPLOAD_ERR_OK) {
+        $file_extension = strtolower(pathinfo($_FILES['thumbnail_file']['name'], PATHINFO_EXTENSION));
+        if (in_array($file_extension, $allowed_extensions, true)) {
+            $file_name = 'tv_show_logo_' . time() . '_' . uniqid() . '.' . $file_extension;
+            if (move_uploaded_file($_FILES['thumbnail_file']['tmp_name'], $upload_dir . $file_name)) {
+                $thumbnail = 'uploads/tv-show-logos/' . $file_name;
+            }
+        }
+    }
+
+    // Handle banner upload
+    if (isset($_FILES['backdrop_file']) && $_FILES['backdrop_file']['error'] === UPLOAD_ERR_OK) {
+        $file_extension = strtolower(pathinfo($_FILES['backdrop_file']['name'], PATHINFO_EXTENSION));
+        if (in_array($file_extension, $allowed_extensions, true)) {
+            $file_name = 'tv_show_banner_' . time() . '_' . uniqid() . '.' . $file_extension;
+            if (move_uploaded_file($_FILES['backdrop_file']['tmp_name'], $upload_dir . $file_name)) {
+                $backdrop = 'uploads/tv-show-logos/' . $file_name;
             }
         }
     }
@@ -110,13 +134,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Generate slug
     $slug = getUniqueSlug($conn, 'tv_shows', $title, $id);
     
-    $stmt = $conn->prepare("UPDATE tv_shows SET title=?, description=?, thumbnail=?, poster=?, release_year=?, rating=?, category_id=?, featured=?, is_active=?, is_free=?, is_premium=?, slug=?, tmdb_id=?, pre_roll_ad_id=?, mid_roll_ad_id=?, end_roll_ad_id=?, loop_ad_id=?, loop_interval=?, banner_ad_id=?, popup_ad_id=?, intro_ad_id=? WHERE id=?");
+    $stmt = $conn->prepare("UPDATE tv_shows SET title=?, description=?, thumbnail=?, poster=?, backdrop=?, release_year=?, rating=?, category_id=?, featured=?, is_active=?, is_free=?, is_premium=?, slug=?, tmdb_id=?, tags=?, quality_label=?, pre_roll_ad_id=?, mid_roll_ad_id=?, end_roll_ad_id=?, loop_ad_id=?, loop_interval=?, banner_ad_id=?, popup_ad_id=?, intro_ad_id=? WHERE id=?");
+    // types: 5s + year + rating + 5 flags + slug + tmdb + tags + quality + 8 ads + id
+    $bindTypes = 'sssss' . 'i' . 'd' . 'iiiii' . 's' . 'i' . 'ss' . 'iiiiiiii' . 'i';
     $stmt->bind_param(
-        "ssssidiiiisiiiiiiiiiii",
+        $bindTypes,
         $title,
         $description,
         $thumbnail,
         $poster,
+        $backdrop,
         $release_year,
         $rating,
         $category_id,
@@ -126,6 +153,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $is_premium,
         $slug,
         $tmdb_id,
+        $tags,
+        $quality_label,
         $pre_roll_ad_id,
         $mid_roll_ad_id,
         $end_roll_ad_id,
@@ -185,7 +214,7 @@ include 'includes/header.php';
                                 <i class="fas fa-download mr-2"></i>Fetch
                             </button>
                         </div>
-                        <p class="text-xs text-gray-400 mt-2">Auto-fills title, description, poster, year &amp; rating. Images are linked directly from TMDB.</p>
+                        <p class="text-xs text-gray-400 mt-2">Auto-fills title, description, logo, poster, banner, year &amp; rating. Images are linked directly from TMDB.</p>
                         <div id="tmdb-fetch-status" class="text-sm mt-2 hidden"></div>
                     </div>
                     
@@ -217,23 +246,7 @@ include 'includes/header.php';
                         </div>
 
                         <div>
-                            <label class="block text-sm font-semibold mb-2">Poster / Banner</label>
-                            <div class="space-y-2">
-                                <?php if (!empty($show['poster'])): ?>
-                                <div class="mb-2">
-                                    <img src="<?php echo htmlspecialchars(assetUrl($show['poster'] ?? '')); ?>" alt="Current Banner"
-                                         class="max-w-xs max-h-40 object-cover bg-gray-800 rounded"
-                                         onerror="this.style.display='none'">
-                                </div>
-                                <?php endif; ?>
-                                <input type="file" name="poster_file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm">
-                                <p class="text-xs text-gray-400">Upload new image or paste URL below</p>
-                                <input type="text" name="poster" id="poster" value="<?php echo htmlspecialchars($show['poster'] ?? ''); ?>" 
-                                       placeholder="Or enter banner/poster URL"
-                                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm">
-                                <input type="hidden" name="thumbnail" id="thumbnail" value="<?php echo htmlspecialchars($show['thumbnail'] ?? ''); ?>">
-                            </div>
+                            <?php include __DIR__ . '/includes/tv-show-image-fields.php'; ?>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -251,6 +264,25 @@ include 'includes/header.php';
                                 <label class="block text-sm font-semibold mb-2">TMDB ID</label>
                                 <input type="number" name="tmdb_id" id="tmdb_id" value="<?php echo htmlspecialchars($show['tmdb_id'] ?? ''); ?>"
                                        class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white" placeholder="Optional">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-semibold mb-2">Tags (shown on poster)</label>
+                                <input type="text" name="tags" id="tags" value="<?php echo htmlspecialchars(implode(', ', parseMovieTags($show['tags'] ?? ''))); ?>"
+                                       placeholder="Hindi Dubbed, Dual Audio"
+                                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                                <p class="text-xs text-gray-400 mt-1">Comma-separated tags displayed on the TV show card.</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-2">Quality Badge</label>
+                                <select name="quality_label" id="quality_label" class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                                    <option value="">None</option>
+                                    <?php foreach (['HD', 'FHD', '4K', 'CAM', 'TS', 'Low Quality', 'High Quality'] as $ql): ?>
+                                    <option value="<?php echo $ql; ?>" <?php echo ($show['quality_label'] ?? '') === $ql ? 'selected' : ''; ?>><?php echo $ql; ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                         </div>
 
@@ -349,10 +381,16 @@ document.getElementById('tmdb-fetch-btn')?.addEventListener('click', async funct
         setVal('tmdb_id', d.tmdb_id);
         setVal('title', d.title);
         setVal('description', d.description);
-        setVal('poster', d.poster || d.backdrop || '');
+        setVal('poster', d.poster || d.thumbnail || '');
+        setVal('backdrop', d.backdrop || '');
         setVal('thumbnail', d.thumbnail || d.poster || '');
         setVal('release_year', d.release_year || '');
         setVal('rating', d.rating || 0);
+        if (typeof updateTvImagePreview === 'function') {
+            updateTvImagePreview('thumbnail', d.thumbnail || d.poster || '');
+            updateTvImagePreview('poster', d.poster || d.thumbnail || '');
+            updateTvImagePreview('backdrop', d.backdrop || '');
+        }
         if (Array.isArray(d.genres) && d.genres.length) {
             const cat = document.getElementById('category_id');
             if (cat && !cat.value) {

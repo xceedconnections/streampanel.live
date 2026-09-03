@@ -3,9 +3,11 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
+require_once __DIR__ . '/includes/movie_helpers.php';
 require_once __DIR__ . '/includes/seo.php';
 
 $conn = getDBConnection();
+ensureLiveTvChannelsSchema($conn);
 seoApplyMeta(buildLiveTvListingSeoMeta($conn));
 $site_name = getSetting($conn, 'site_name', 'StreamFlix');
 
@@ -254,6 +256,28 @@ include 'includes/header.php';
     border-radius: 0.25rem;
     z-index: 10;
 }
+.live-tv-channel-tags {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    right: 3.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    z-index: 10;
+    pointer-events: none;
+}
+.live-tv-channel-tag {
+    background: rgba(0,0,0,0.75);
+    color: #fbbf24;
+    border: 1px solid rgba(251,191,36,0.4);
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.2rem;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
 .live-tv-channel-card.premium {
     border: 2px solid rgba(251, 191, 36, 0.6);
     box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
@@ -475,6 +499,7 @@ include 'includes/header.php';
                             </svg>
                         </div>
                     </div>
+                    <?php renderLiveTvChannelImageTags($channel); ?>
                     <div class="live-tv-channel-badge">LIVE</div>
                 </div>
                 <div class="live-tv-channel-info">
@@ -609,6 +634,7 @@ include 'includes/header.php';
                                     </svg>
                                 </div>
                             </div>
+                            <?php renderLiveTvChannelImageTags($channel); ?>
                             <div class="live-tv-channel-badge">LIVE</div>
                         </div>
                         <div class="live-tv-channel-info">

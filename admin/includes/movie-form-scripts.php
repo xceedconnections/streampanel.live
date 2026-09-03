@@ -37,6 +37,11 @@ document.getElementById('tmdb-fetch-btn')?.addEventListener('click', async funct
         document.querySelector('[name=rating]').value = d.rating || '';
         document.getElementById('cast_data').value = JSON.stringify(d.cast_data || []);
         document.getElementById('genres').value = JSON.stringify(d.genres || []);
+        if (typeof updateMovieImagePreview === 'function') {
+            updateMovieImagePreview('thumbnail', d.thumbnail || '');
+            updateMovieImagePreview('poster', d.poster || '');
+            updateMovieImagePreview('backdrop', d.backdrop || '');
+        }
         status.textContent = 'Movie data fetched successfully!';
         status.className = 'text-sm mt-2 text-green-400';
     } catch (e) {
@@ -45,6 +50,21 @@ document.getElementById('tmdb-fetch-btn')?.addEventListener('click', async funct
     }
     this.disabled = false;
 });
+
+window.updateMovieImagePreview = function (kind, url) {
+    var img = document.getElementById(kind + '-preview');
+    var wrap = document.getElementById(kind + '-preview-wrap');
+    if (!img || !wrap) return;
+    url = (url || '').trim();
+    if (!url) {
+        wrap.classList.add('hidden');
+        img.removeAttribute('src');
+        return;
+    }
+    img.style.display = '';
+    img.src = url;
+    wrap.classList.remove('hidden');
+};
 
 function addDownloadLink() {
     downloadCount++;

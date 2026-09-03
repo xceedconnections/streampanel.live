@@ -414,6 +414,34 @@ function renderMoviePosterBadges(array $movie): void
     echo '</div>';
 }
 
+/**
+ * Tags for Live TV channel card images. Uses channel tags, else category.
+ *
+ * @return string[]
+ */
+function getLiveTvChannelImageTags(array $channel): array
+{
+    $tags = parseMovieTags($channel['tags'] ?? '');
+    if (!empty($tags)) {
+        return $tags;
+    }
+    $category = trim((string) ($channel['category'] ?? ''));
+    return $category !== '' ? [$category] : [];
+}
+
+function renderLiveTvChannelImageTags(array $channel): void
+{
+    $tags = getLiveTvChannelImageTags($channel);
+    if (empty($tags)) {
+        return;
+    }
+    echo '<div class="live-tv-channel-tags">';
+    foreach ($tags as $tag) {
+        echo '<span class="live-tv-channel-tag">' . htmlspecialchars($tag) . '</span>';
+    }
+    echo '</div>';
+}
+
 function getMovieSourceDisplayLabel(array $source, int $index = 0): string
 {
     $quality = trim($source['quality'] ?? '');

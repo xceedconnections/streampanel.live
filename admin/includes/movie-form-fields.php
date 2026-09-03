@@ -51,34 +51,48 @@ $movie_form_action = $movie_form_action ?? '?tab=movies';
             <div>
                 <label class="block text-sm font-semibold mb-2">Movie Logo / Thumbnail</label>
                 <div class="space-y-2">
-                    <input type="file" name="thumbnail_file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm">
-                    <p class="text-xs text-gray-400">Upload movie logo image (JPG, PNG, GIF, WEBP). Stored in uploads/tv-show-logos.</p>
-                    <?php if (!empty($edit_movie['thumbnail'])): ?>
-                    <div class="mt-2">
-                        <img src="<?php echo htmlspecialchars($edit_movie['thumbnail']); ?>" alt="Current Movie Logo"
-                             class="max-w-24 max-h-24 object-contain bg-gray-800 rounded p-2"
+                    <input type="text" name="thumbnail" id="thumbnail" value="<?php echo htmlspecialchars($edit_movie['thumbnail'] ?? ''); ?>" 
+                           placeholder="https://... logo/thumbnail URL"
+                           class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm"
+                           oninput="updateMovieImagePreview('thumbnail', this.value)">
+                    <p class="text-xs text-gray-400">Paste a URL or upload a file below.</p>
+                    <div id="thumbnail-preview-wrap" class="mt-2 <?php echo empty($edit_movie['thumbnail']) ? 'hidden' : ''; ?>">
+                        <img id="thumbnail-preview" src="<?php echo htmlspecialchars($edit_movie['thumbnail'] ?? ''); ?>" alt="Thumbnail preview"
+                             class="max-h-24 max-w-24 object-contain bg-black rounded border border-gray-700 p-1"
                              onerror="this.style.display='none'">
                     </div>
-                    <?php endif; ?>
-                    <input type="text" name="thumbnail" value="<?php echo htmlspecialchars($edit_movie['thumbnail'] ?? ''); ?>" 
-                           placeholder="Or enter logo/thumbnail URL"
+                    <input type="file" name="thumbnail_file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                            class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white text-sm">
                 </div>
             </div>
             <div>
-                <label class="block text-sm font-semibold mb-2">Poster URL (TMDB)</label>
-                <input type="text" name="poster" id="poster" value="<?php echo htmlspecialchars($edit_movie['poster'] ?? ''); ?>" 
-                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
-                <p class="text-xs text-gray-400 mt-1">Movie poster image (direct TMDB link).</p>
+                <label class="block text-sm font-semibold mb-2">Poster URL</label>
+                <input type="url" name="poster" id="poster" value="<?php echo htmlspecialchars($edit_movie['poster'] ?? ''); ?>" 
+                       placeholder="https://image.tmdb.org/t/p/w500/..."
+                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white"
+                       oninput="updateMovieImagePreview('poster', this.value)">
+                <p class="text-xs text-gray-400 mt-1">Portrait poster (cards / listings). Paste URL or use TMDB Fetch.</p>
+                <div id="poster-preview-wrap" class="mt-2 <?php echo empty($edit_movie['poster']) ? 'hidden' : ''; ?>">
+                    <img id="poster-preview" src="<?php echo htmlspecialchars($edit_movie['poster'] ?? ''); ?>" alt="Poster preview"
+                         class="max-h-48 rounded border border-gray-700 object-contain bg-black"
+                         onerror="this.style.display='none'">
+                </div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-                <label class="block text-sm font-semibold mb-2">Banner / Backdrop URL (TMDB)</label>
-                <input type="text" name="backdrop" id="backdrop" value="<?php echo htmlspecialchars($edit_movie['backdrop'] ?? ''); ?>" 
-                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white">
+                <label class="block text-sm font-semibold mb-2">Banner / Backdrop URL</label>
+                <input type="url" name="backdrop" id="backdrop" value="<?php echo htmlspecialchars($edit_movie['backdrop'] ?? ''); ?>" 
+                       placeholder="https://image.tmdb.org/t/p/w1280/..."
+                       class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white"
+                       oninput="updateMovieImagePreview('backdrop', this.value)">
+                <p class="text-xs text-gray-400 mt-1">Wide banner image. Paste URL or use TMDB Fetch.</p>
+                <div id="backdrop-preview-wrap" class="mt-2 <?php echo empty($edit_movie['backdrop']) ? 'hidden' : ''; ?>">
+                    <img id="backdrop-preview" src="<?php echo htmlspecialchars($edit_movie['backdrop'] ?? ''); ?>" alt="Banner preview"
+                         class="max-h-40 w-full rounded border border-gray-700 object-cover bg-black"
+                         onerror="this.style.display='none'">
+                </div>
             </div>
             <div>
                 <label class="block text-sm font-semibold mb-2">Director</label>
