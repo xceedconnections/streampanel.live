@@ -6,9 +6,12 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/movie_helpers.php';
+require_once __DIR__ . '/../includes/content_ads.php';
 require_once __DIR__ . '/../admin/includes/functions.php';
 
 $conn = getDBConnection();
+ensureMoviesSchema($conn);
+ensureContentAdColumns($conn, 'movies');
 
 $slug = trim((string) ($_GET['slug'] ?? ''));
 $id = isset($_GET['id']) ? (int) $_GET['id'] : null;
@@ -107,6 +110,12 @@ if ($movie) {
 }
 
 $suggested_movies = [];
+$movie_ads_loaded = [
+    'show_ads' => false,
+    'has_subscription' => false,
+    'intro_ad' => null,
+    'ads' => [],
+];
 if ($movie && !$error) {
     $movieId = (int) $movie['id'];
     $stmt = $conn->prepare('SELECT id, title, slug, poster, thumbnail, release_year, rating, is_premium, is_free
@@ -116,7 +125,9 @@ if ($movie && !$error) {
         $stmt->execute();
         $suggested_movies = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
+    $movie_ads_loaded = loadContentAds($conn, $movie);
 }
+$adsDataPayload = contentAdsJsPayload($movie_ads_loaded);
 ?>
 <?php
 $current_page = 'movie-watch.php';
@@ -154,6 +165,7 @@ $current_page = 'movie-watch.php';
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style><?php include __DIR__ . '/../includes/watch-player-layout-styles.php'; ?></style>
+    <style><?php include __DIR__ . '/../includes/content-ad-styles.php'; ?></style>
 </head>
 <body class="bg-black text-white">
 <?php
@@ -233,21 +245,24 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
             <div class="video-player-wrapper" id="video-wrapper">
                 <video id="videoPlayer" class="video-player" controls autoplay playsinline muted style="<?php echo $is_iframe_or_embed ? 'display: none;' : ''; ?>"></video>
                 <iframe id="youtubePlayer" class="video-player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="display: none;"></iframe>
-                <div id="html-embed-container" style="<?php echo $is_iframe_or_embed ? 'display: block;' : 'display: none;'; ?>">
+                <div id="html-embed-container" style="<?php echo $is_iframe_or_embed ? 'display: none;' : 'display: none;'; ?>">
                     <?php if ($embedMode['mode'] === 'embed_proxy'): ?>
                     <iframe id="embedFrame"
-                        src="<?php echo htmlspecialchars($embed_source_url, ENT_QUOTES, 'UTF-8'); ?>"
+                        src=""
+                        data-src="<?php echo htmlspecialchars($embed_source_url, ENT_QUOTES, 'UTF-8'); ?>"
                         allowfullscreen
                         allow="autoplay; encrypted-media; picture-in-picture"
                         loading="eager"></iframe>
                     <?php elseif ($embedMode['mode'] === 'iframe_url' && $iframe_direct_url !== ''): ?>
                     <iframe id="embedFrame"
-                        src="<?php echo $iframe_direct_url; ?>"
+                        src=""
+                        data-src="<?php echo $iframe_direct_url; ?>"
                         allowfullscreen
                         allow="autoplay; encrypted-media; picture-in-picture"
                         loading="eager"></iframe>
                     <?php endif; ?>
                 </div>
+                <?php include __DIR__ . '/../includes/content-ad-markup.php'; ?>
             </div>
         </div>
         <?php endif; ?>
@@ -294,6 +309,10 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script>
+    const adsData = <?php echo json_encode($adsDataPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
+    </script>
+    <?php include __DIR__ . '/../includes/content-ad-player.js.php'; ?>
     <script>
     const movieId = <?php echo (int) $movie['id']; ?>;
     const streamUrl = <?php echo json_encode($selected_source['url'] ?? ''); ?>;
@@ -357,11 +376,18 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
             .catch(() => {});
     }
 
-    function loadStream() {
-        if (embedMode === 'iframe_url' || embedMode === 'embed_proxy') return;
+    function playActualStream() {
+        const htmlEmbedContainer = document.getElementById('html-embed-container');
+        const embedFrame = document.getElementById('embedFrame');
+        if (embedMode === 'iframe_url' || embedMode === 'embed_proxy') {
+            if (htmlEmbedContainer) htmlEmbedContainer.style.display = 'block';
+            if (embedFrame && !embedFrame.src && embedFrame.getAttribute('data-src')) {
+                embedFrame.src = embedFrame.getAttribute('data-src');
+            }
+            return;
+        }
         const video = document.getElementById('videoPlayer');
         const youtubeIframe = document.getElementById('youtubePlayer');
-        const htmlEmbedContainer = document.getElementById('html-embed-container');
         if (!video || !streamUrl) return;
 
         if (htmlEmbedContainer) {
@@ -398,6 +424,14 @@ renderPublicCustomCode($conn, 'custom_code_after_header');
         }
         video.src = streamUrl;
         video.play().catch(() => {});
+    }
+
+    function loadStream() {
+        if (typeof runPrerollThen === 'function') {
+            runPrerollThen(playActualStream);
+            return;
+        }
+        playActualStream();
     }
 
     document.addEventListener('DOMContentLoaded', function() {

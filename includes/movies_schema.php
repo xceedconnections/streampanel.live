@@ -24,6 +24,14 @@ function ensureMoviesSchema($conn): void
         'is_active' => "TINYINT(1) DEFAULT 1",
         'is_free' => "TINYINT(1) DEFAULT 1",
         'is_premium' => "TINYINT(1) DEFAULT 0",
+        'pre_roll_ad_id' => "INT NULL",
+        'mid_roll_ad_id' => "INT NULL",
+        'end_roll_ad_id' => "INT NULL",
+        'loop_ad_id' => "INT NULL",
+        'loop_interval' => "INT NULL",
+        'banner_ad_id' => "INT NULL",
+        'popup_ad_id' => "INT NULL",
+        'intro_ad_id' => "INT NULL",
     ];
 
     foreach ($columns as $column => $definition) {

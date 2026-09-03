@@ -223,12 +223,20 @@ include 'includes/header.php';
     .hero-carousel-nav {
         width: 36px;
         height: 36px;
+        top: 18%;
+        transform: none;
     }
     .hero-carousel-nav.prev {
         left: 0.5rem;
     }
     .hero-carousel-nav.next {
         right: 0.5rem;
+    }
+    .hero-badge {
+        position: relative;
+        z-index: 21;
+        margin-left: 0;
+        padding-left: 0;
     }
 }
 .hero-carousel-dots {

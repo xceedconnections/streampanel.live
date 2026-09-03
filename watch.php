@@ -406,13 +406,13 @@ $page_title = $title;
 if ($type === 'movie' && !empty($content)) {
     applyMovieSeoMeta($conn, $content, 'watch');
     $page_title = $GLOBALS['page_title'] ?? $title;
-}
-
-if ($type === 'movie') {
-    $intro_ad = null;
-    $episode_ads = [];
-    $show_ads = false;
-    $hasSubscription = isLoggedIn() && hasActiveSubscription();
+    require_once __DIR__ . '/includes/content_ads.php';
+    ensureContentAdColumns($conn, 'movies');
+    $movieAds = loadContentAds($conn, $content);
+    $intro_ad = $movieAds['intro_ad'];
+    $episode_ads = $movieAds['ads'];
+    $show_ads = $movieAds['show_ads'];
+    $hasSubscription = $movieAds['has_subscription'];
 }
 
 // Get episode info for TV episodes

@@ -213,6 +213,12 @@ $movie_form_action = $movie_form_action ?? '?tab=movies';
             <p class="text-xs text-gray-400 mt-2">Each source opens in its own tab. Set priority to 0 for the default source.</p>
         </div>
 
+        <?php
+        $ad_settings_row = $edit_movie ?? [];
+        $ad_settings_audience = 'movie watching';
+        include __DIR__ . '/ad-settings-fields.php';
+        ?>
+
         <!-- Download Links -->
         <div class="mb-6">
             <div class="flex items-center justify-between mb-4">

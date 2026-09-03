@@ -3,6 +3,7 @@
  * Shared admin helpers for movie add/edit forms.
  */
 require_once __DIR__ . '/../../includes/movie_helpers.php';
+require_once __DIR__ . '/../../includes/content_ads.php';
 
 function saveMovieFromRequest($conn, ?int $movieId = null): array
 {
@@ -181,6 +182,8 @@ function saveMovieFromRequest($conn, ?int $movieId = null): array
         $tstmt->bind_param('si', $trailer_url, $savedId);
         $tstmt->execute();
     }
+
+    saveContentAdIds($conn, 'movies', (int) $savedId);
 
     return [
         'success' => true,

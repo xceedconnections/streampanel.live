@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $language = sanitize($_POST['language'] ?? 'en');
     $featured = isset($_POST['featured']) ? 1 : 0;
     $is_active = isset($_POST['is_active']) ? 1 : 0;
-    $show_in_slider = isset($_POST['show_in_slider']) ? 1 : 0;
+    $show_in_slider = (int) ($edit_channel['show_in_slider'] ?? 0);
     
     // Handle free/premium - mutually exclusive (radio button)
     $content_type = $_POST['content_type'] ?? 'free';
@@ -306,11 +306,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="checkbox" name="featured" value="1" <?php echo ($edit_channel['featured'] ?? 0) ? 'checked' : ''; ?> 
                            class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
                     <span>Featured</span>
-                </label>
-                <label class="flex items-center">
-                    <input type="checkbox" name="show_in_slider" value="1" <?php echo ($edit_channel['show_in_slider'] ?? 0) ? 'checked' : ''; ?> 
-                           class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
-                    <span>Show in Homepage Slider</span>
                 </label>
                 <label class="flex items-center">
                     <input type="checkbox" name="is_active" value="1" <?php echo ($edit_channel['is_active'] ?? 1) ? 'checked' : ''; ?> 

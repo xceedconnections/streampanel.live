@@ -450,11 +450,6 @@ $edit_channel = null;
                     <span>Featured</span>
                 </label>
                 <label class="flex items-center">
-                    <input type="checkbox" name="show_in_slider" value="1" 
-                           class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
-                    <span>Show in Homepage Slider</span>
-                </label>
-                <label class="flex items-center">
                     <input type="checkbox" name="is_active" value="1" checked 
                            class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
                     <span>Active</span>
