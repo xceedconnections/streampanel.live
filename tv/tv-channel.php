@@ -400,7 +400,7 @@ if ($channel) {
     <meta charset="UTF-8">
     
     <!-- Mobile Optimization -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="mobile-web-app-capable" content="yes">
     
     <!-- Primary Meta Tags -->

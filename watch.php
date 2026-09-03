@@ -496,7 +496,7 @@ include 'includes/header.php';
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title><?php echo htmlspecialchars(($page_title ?? 'Watch') . ' - ' . getSetting($conn, 'site_name', 'StreamPanel')); ?></title>
     <?php if (!empty($meta_description)): ?>
     <meta name="description" content="<?php echo htmlspecialchars($meta_description); ?>">

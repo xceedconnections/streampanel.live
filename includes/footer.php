@@ -25,22 +25,6 @@
     } catch (Exception $e) {
         $site_name = 'StreamPanel';
     }
-
-    if (!isset($isAndroidTV)) {
-        $isAndroidTV = isset($_SERVER['HTTP_USER_AGENT']) && preg_match('/(Android TV|AFT|BRAVIA|MiTV|SmartTV|GoogleTV|Tizen|Web0S|HbbTV)/i', $_SERVER['HTTP_USER_AGENT']);
-    }
-
-    if (empty($mobile_footer_nav_styles_included)) {
-        echo '<style id="mobile-footer-nav-styles">';
-        include __DIR__ . '/mobile-footer-nav-styles.php';
-        echo '</style>';
-    }
-
-    if (empty($isAndroidTV)) {
-        echo '<style id="mobile-footer-nav-critical">';
-        echo '@media (max-width:767px){#mobile-footer-nav-shell{position:fixed!important;left:0!important;right:0!important;bottom:0!important;z-index:99999!important;width:100%!important;}#mobile-footer-nav-shell #mobile-footer-nav{display:flex!important;visibility:visible!important;opacity:1!important;background:#141414!important;}}';
-        echo '</style>';
-    }
     ?>
     <?php if (empty($minimal_site_footer)): ?>
     <footer class="site-footer-desktop bg-black border-t border-gray-800 mt-20 py-12">
@@ -86,8 +70,7 @@
     if (empty($mobile_nav_path)) {
         $mobile_nav_path = $_SERVER['REQUEST_URI'] ?? '';
     }
-    include __DIR__ . '/mobile-footer-nav.php';
-    include __DIR__ . '/mobile-footer-nav-pin.php';
+    include __DIR__ . '/mobile-nav.php';
     ?>
 </body>
 </html>
