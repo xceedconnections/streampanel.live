@@ -3,12 +3,13 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
+require_once __DIR__ . '/includes/seo.php';
 
-$page_title = "TV Show Details";
 $conn = getDBConnection();
 
 // Check if TV Shows section is enabled
 if (!isSectionEnabled($conn, 'tv_shows')) {
+    $page_title = 'TV Show Details';
     include 'includes/header.php';
     ?>
     <div class="min-h-screen flex items-center justify-center bg-gradient-to-b from-black via-gray-900 to-black py-20">
@@ -122,6 +123,7 @@ foreach ($all_episodes as $episode) {
 }
 
 $page_title = $show['title'];
+seoApplyMeta(buildTvShowSeoMeta($conn, $show));
 
 // Get enabled sections for navigation (needed for footer)
 $enable_movies = isSectionEnabled($conn, 'movies');

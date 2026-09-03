@@ -3,12 +3,13 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
+require_once __DIR__ . '/includes/seo.php';
 
-$page_title = "TV Shows";
 $conn = getDBConnection();
 
 // Check if TV Shows section is enabled
 if (!isSectionEnabled($conn, 'tv_shows')) {
+    $page_title = 'TV Shows';
     include 'includes/header.php';
     ?>
     <div class="min-h-screen flex items-center justify-center bg-gradient-to-b from-black via-gray-900 to-black py-20">
@@ -59,6 +60,21 @@ $tv_shows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 // Get categories for filter
 $categories = $conn->query("SELECT * FROM categories")->fetch_all(MYSQLI_ASSOC);
+
+$category_label = $category;
+if ($category !== '') {
+    foreach ($categories as $cat) {
+        if ((string) $cat['id'] === (string) $category || ($cat['slug'] ?? '') === $category || ($cat['name'] ?? '') === $category) {
+            $category_label = $cat['name'];
+            break;
+        }
+    }
+}
+
+seoApplyMeta(buildTvShowsListingSeoMeta($conn, [
+    'category' => $category_label,
+    'search' => $search,
+]));
 
 include 'includes/header.php';
 ?>

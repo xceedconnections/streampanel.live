@@ -5,10 +5,11 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
 require_once __DIR__ . '/includes/movie_helpers.php';
 require_once __DIR__ . '/includes/movies_schema.php';
+require_once __DIR__ . '/includes/seo.php';
 
-$page_title = "Home";
 $conn = getDBConnection();
 ensureMoviesSchema($conn);
+seoApplyMeta(buildHomeSeoMeta($conn));
 
 // Avoid CDN/browser serving a stale homepage banner
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');

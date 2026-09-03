@@ -106,6 +106,12 @@ if (isset($_SESSION['user_id'])) {
 }
 
 $current_page = basename($_SERVER['PHP_SELF']);
+require_once __DIR__ . '/seo.php';
+
+$seo_document_title = !empty($page_title) ? $page_title : $site_name;
+if (!empty($page_title) && stripos($page_title, $site_name) === false) {
+    $seo_document_title = $page_title . ' - ' . $site_name;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -113,7 +119,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="mobile-web-app-capable" content="yes">
-    <title><?php echo isset($page_title) ? $page_title . ' - ' : ''; ?><?php echo htmlspecialchars($site_name); ?></title>
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+    <title><?php echo htmlspecialchars($seo_document_title); ?></title>
     <?php if (isset($meta_description) && !empty($meta_description)): ?>
     <meta name="description" content="<?php echo htmlspecialchars($meta_description); ?>">
     <?php endif; ?>
@@ -126,24 +133,31 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <?php if (!empty($og_image)): ?>
     <meta property="og:image" content="<?php echo htmlspecialchars($og_image); ?>">
     <?php endif; ?>
-    <?php if (!empty($page_title)): ?>
-    <meta property="og:title" content="<?php echo htmlspecialchars($page_title . ' - ' . $site_name); ?>">
-    <?php endif; ?>
+    <meta property="og:title" content="<?php echo htmlspecialchars($seo_document_title); ?>">
     <?php if (!empty($meta_description)): ?>
     <meta property="og:description" content="<?php echo htmlspecialchars($meta_description); ?>">
     <?php endif; ?>
     <meta property="og:type" content="<?php echo htmlspecialchars($og_type ?? 'website'); ?>">
     <meta property="og:url" content="<?php echo htmlspecialchars($canonical_url ?? BASE_URL); ?>">
+    <meta property="og:site_name" content="<?php echo htmlspecialchars($site_name); ?>">
     <meta name="twitter:card" content="summary_large_image">
-    <?php if (!empty($page_title)): ?>
-    <meta name="twitter:title" content="<?php echo htmlspecialchars($page_title . ' - ' . $site_name); ?>">
-    <?php endif; ?>
+    <meta name="twitter:title" content="<?php echo htmlspecialchars($seo_document_title); ?>">
     <?php if (!empty($meta_description)): ?>
     <meta name="twitter:description" content="<?php echo htmlspecialchars($meta_description); ?>">
     <?php endif; ?>
     <?php if (!empty($og_image)): ?>
     <meta name="twitter:image" content="<?php echo htmlspecialchars($og_image); ?>">
     <?php endif; ?>
+    <?php
+    if (!empty($seo_json_ld)) {
+        renderSeoJsonLd($seo_json_ld);
+    }
+    $custom_css = getPublicCustomCode($conn, 'custom_css');
+    if ($custom_css !== '') {
+        echo "<style id=\"site-custom-css\">\n" . $custom_css . "\n</style>\n";
+    }
+    renderPublicCustomCode($conn, 'custom_code_head');
+    ?>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -169,6 +183,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </style>
 </head>
 <body class="bg-black text-white">
+    <?php renderPublicCustomCode($conn, 'custom_code_body'); ?>
     <nav class="fixed top-0 left-0 right-0 z-50 navbar-blur">
         <div class="container mx-auto px-4 py-3 flex items-center justify-between">
             <div class="flex items-center space-x-8">
@@ -275,4 +290,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </script>
     
     <div class="pt-16">
-    <?php $site_content_wrapper_open = true; ?>
+    <?php
+    $site_content_wrapper_open = true;
+    renderPublicCustomCode($conn, 'custom_code_after_header');
+    ?>

@@ -67,10 +67,12 @@
     <?php endif; ?>
 
     <?php
-    if (empty($mobile_nav_path)) {
-        $mobile_nav_path = $_SERVER['REQUEST_URI'] ?? '';
+    if (isset($conn) && function_exists('renderPublicCustomCode')) {
+        renderPublicCustomCode($conn, 'custom_code_after_body');
+    } elseif (isset($conn)) {
+        require_once __DIR__ . '/seo.php';
+        renderPublicCustomCode($conn, 'custom_code_after_body');
     }
-    include __DIR__ . '/mobile-nav.php';
     ?>
 </body>
 </html>

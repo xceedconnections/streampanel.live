@@ -364,32 +364,23 @@ if (!$channel) {
 
 // SEO meta data for TV channel page
 $site_name = getSetting($conn, 'site_name', 'StreamFlix');
+require_once __DIR__ . '/../includes/seo.php';
 if ($channel) {
-    $channel_name_raw = $channel['name'] ?? 'Live TV Channel';
-    $channel_name_lower = strtolower($channel_name_raw);
-    $channel_category = $channel['category'] ?? 'TV Channel';
-    
-    // Enhanced SEO title and description
-    $pageTitle = "Watch {$channel_name_raw} Live Streaming Free - HD Channel Online | {$site_name}";
-    $metaDescription = "{$channel_name_lower} live, {$channel_name_lower} live stream, watch {$channel_name_lower} online, {$channel_name_lower} tv channel, live {$channel_category} {$channel_name_lower}, {$channel_name_lower} hd, {$channel_name_lower} sports channel, {$channel_name_lower} free streaming, watch {$channel_name_lower} live";
-    
-    // Enhanced keywords
-    $metaKeywords = "{$channel_name_lower} live, {$channel_name_lower} live stream, watch {$channel_name_lower} online, {$channel_name_lower} tv channel, live {$channel_category} {$channel_name_lower}, {$channel_name_lower} hd, {$channel_name_lower} sports channel, {$channel_name_lower} free streaming, watch {$channel_name_lower} live";
-    
-    // Channel logo URL for social sharing
-    $channel_logo_url = assetUrl($channel['logo'] ?? '');
-    
-    // Canonical URL should point to main watch page
-    $canonical_url = BASE_URL . '/watch-live-tv/' . ($channel['slug'] ?? 'channel');
-    
-    // Footer heading
-    $footer_heading = "Watch {$channel_name_raw} Live Streaming Free - HD Channel Online";
+    $seo = buildLiveChannelSeoMeta($conn, $channel);
+    $pageTitle = $seo['page_title'];
+    $metaDescription = $seo['meta_description'];
+    $metaKeywords = $seo['meta_keywords'];
+    $channel_logo_url = $seo['og_image'];
+    $canonical_url = $seo['canonical_url'];
+    $seo_json_ld = $seo['seo_json_ld'] ?? null;
+    $footer_heading = "Watch " . ($channel['name'] ?? 'Live TV') . " Live Streaming Free - HD Channel Online";
 } else {
     $pageTitle = "Channel Not Found - {$site_name}";
     $metaDescription = "Requested live TV channel could not be found on {$site_name}.";
     $metaKeywords = "live tv, tv channel, {$site_name}";
     $channel_logo_url = '';
-    $canonical_url = BASE_URL . '/watch-live-tv';
+    $canonical_url = BASE_URL . '/live-tv';
+    $seo_json_ld = null;
     $footer_heading = '';
 }
 ?>
@@ -407,12 +398,13 @@ if ($channel) {
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
     <meta name="description" content="<?php echo htmlspecialchars($metaDescription); ?>">
     <meta name="keywords" content="<?php echo htmlspecialchars($metaKeywords); ?>">
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
     
     <!-- Open Graph / Facebook -->
     <?php if ($channel): ?>
     <meta property="og:type" content="website">
-    <meta property="og:title" content="<?php echo htmlspecialchars("Watch {$channel_name_raw} Live Streaming | Live TV Online"); ?>">
-    <meta property="og:description" content="<?php echo htmlspecialchars("Live stream {$channel_name_raw} TV - Watch in HD quality for free."); ?>">
+    <meta property="og:title" content="<?php echo htmlspecialchars($pageTitle); ?>">
+    <meta property="og:description" content="<?php echo htmlspecialchars($metaDescription); ?>">
     <meta property="og:url" content="<?php echo htmlspecialchars($canonical_url); ?>">
     <?php if (!empty($channel_logo_url)): ?>
     <meta property="og:image" content="<?php echo htmlspecialchars($channel_logo_url); ?>">
@@ -422,8 +414,8 @@ if ($channel) {
     <!-- Twitter Card -->
     <?php if ($channel): ?>
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="<?php echo htmlspecialchars("{$channel_name_raw} Live Stream | Free Sports Channel"); ?>">
-    <meta name="twitter:description" content="<?php echo htmlspecialchars("Watch {$channel_name_raw} live online - HD sports streaming free"); ?>">
+    <meta name="twitter:title" content="<?php echo htmlspecialchars($pageTitle); ?>">
+    <meta name="twitter:description" content="<?php echo htmlspecialchars($metaDescription); ?>">
     <?php if (!empty($channel_logo_url)): ?>
     <meta name="twitter:image" content="<?php echo htmlspecialchars($channel_logo_url); ?>">
     <?php endif; ?>
@@ -431,6 +423,16 @@ if ($channel) {
     
     <!-- Canonical URL -->
     <link rel="canonical" href="<?php echo htmlspecialchars($canonical_url); ?>">
+    <?php
+    if (!empty($seo_json_ld)) {
+        renderSeoJsonLd($seo_json_ld);
+    }
+    $custom_css = getPublicCustomCode($conn, 'custom_css');
+    if ($custom_css !== '') {
+        echo "<style id=\"site-custom-css\">\n" . $custom_css . "\n</style>\n";
+    }
+    renderPublicCustomCode($conn, 'custom_code_head');
+    ?>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1676,6 +1678,10 @@ if ($channel) {
     </style>
 </head>
 <body class="bg-black text-white">
+<?php
+renderPublicCustomCode($conn, 'custom_code_body');
+renderPublicCustomCode($conn, 'custom_code_after_header');
+?>
 
 <?php if ($error || !$channel): ?>
     <div class="error-page">

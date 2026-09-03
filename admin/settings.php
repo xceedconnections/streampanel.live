@@ -10,6 +10,13 @@ $message_type = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
     // Define all checkbox settings
     $checkbox_settings = ['enable_movies', 'enable_tv_shows', 'enable_live_tv', 'maintenance_mode', 'registration_enabled', 'login_required_tv_channels', 'login_required_tv_shows', 'login_required_movies'];
+    $raw_html_settings = [
+        'custom_code_head',
+        'custom_code_after_header',
+        'custom_code_body',
+        'custom_code_after_body',
+        'custom_css',
+    ];
     
     // Ensure all checkbox settings are in POST (with hidden inputs, they should be, but double-check)
     foreach ($checkbox_settings as $checkbox_key) {
@@ -25,9 +32,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         }
         
         // Sanitize value
-        if (in_array($key, $checkbox_settings)) {
+        if (in_array($key, $checkbox_settings, true)) {
             // For checkboxes, value will be '1' if checked, '0' if unchecked (from hidden input)
             $value = ($value == '1') ? '1' : '0';
+        } elseif (in_array($key, $raw_html_settings, true)) {
+            // Keep raw HTML/CSS for ads and custom scripts (admin only)
+            $value = is_string($value) ? $value : '';
         } else {
             // For text inputs, sanitize
             $value = sanitize($value);
@@ -229,6 +239,45 @@ while ($row = $result->fetch_assoc()) {
                                    class="w-4 h-4 text-netflix-red bg-gray-800 border-gray-700 rounded mr-2">
                             <span>Login Required to View Movies</span>
                         </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom HTML / CSS (Ads & Tracking) -->
+            <div class="border-t border-gray-800 pt-6">
+                <h3 class="text-lg font-semibold mb-2 text-gray-300">Custom HTML &amp; CSS (Public Pages)</h3>
+                <p class="text-xs text-gray-400 mb-4">These codes load on user-facing website pages only (not admin). Use for ads, analytics, or custom CSS.</p>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-2">Custom CSS</label>
+                        <textarea name="custom_css" rows="5"
+                                  class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white font-mono text-sm"
+                                  placeholder=".my-ad { margin: 10px 0; }"><?php echo htmlspecialchars($settings['custom_css'] ?? ''); ?></textarea>
+                        <p class="text-xs text-gray-400 mt-1">Injected inside <code>&lt;style&gt;</code> in the page head.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-2">HTML in Header (&lt;head&gt;)</label>
+                        <textarea name="custom_code_head" rows="5"
+                                  class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white font-mono text-sm"
+                                  placeholder="<!-- scripts, meta, ad head tags -->"><?php echo htmlspecialchars($settings['custom_code_head'] ?? ''); ?></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-2">HTML in Body (after &lt;body&gt;)</label>
+                        <textarea name="custom_code_body" rows="5"
+                                  class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white font-mono text-sm"
+                                  placeholder="<!-- body start ads -->"><?php echo htmlspecialchars($settings['custom_code_body'] ?? ''); ?></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-2">HTML After Header (below top navbar)</label>
+                        <textarea name="custom_code_after_header" rows="5"
+                                  class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white font-mono text-sm"
+                                  placeholder="<!-- banner under navbar -->"><?php echo htmlspecialchars($settings['custom_code_after_header'] ?? ''); ?></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-2">HTML After Body (before &lt;/body&gt;)</label>
+                        <textarea name="custom_code_after_body" rows="5"
+                                  class="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 text-white font-mono text-sm"
+                                  placeholder="<!-- footer scripts / ads -->"><?php echo htmlspecialchars($settings['custom_code_after_body'] ?? ''); ?></textarea>
                     </div>
                 </div>
             </div>

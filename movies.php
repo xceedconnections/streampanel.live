@@ -5,8 +5,8 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
 require_once __DIR__ . '/includes/movie_helpers.php';
 require_once __DIR__ . '/includes/cast_helpers.php';
+require_once __DIR__ . '/includes/seo.php';
 
-$page_title = "Movies";
 $conn = getDBConnection();
 ensureMoviesSchema($conn);
 
@@ -172,6 +172,12 @@ if ($category) {
         $active_category_name = ucfirst(str_replace('-', ' ', $category));
     }
 }
+
+seoApplyMeta(buildMoviesListingSeoMeta($conn, [
+    'category' => $active_category_name !== '' ? $active_category_name : $category,
+    'search' => $search,
+    'year' => $year,
+]));
 
 include 'includes/header.php';
 ?>

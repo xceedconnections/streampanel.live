@@ -15,8 +15,10 @@ RewriteRule ^shows/api/viewer_tracker/?$ shows/api/viewer_tracker.php [L,QSA]
 RewriteRule ^movies/api/viewer_tracker/?$ movies/api/viewer_tracker.php [L,QSA]
 RewriteRule ^api/search-suggest/?$ api/search-suggest.php [L,QSA]
 
-# Sitemap XML -> PHP
+# Sitemap / robots
+RewriteRule ^sitemap\.xml$ sitemap.php [L,QSA]
 RewriteRule ^sitemap-tv-channels\.xml$ sitemap-tv-channels.php [L,QSA]
+RewriteRule ^robots\.txt$ robots.php [L,QSA]
 
 # Pass through real files and directories
 RewriteCond %{REQUEST_FILENAME} -f [OR]

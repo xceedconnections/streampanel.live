@@ -3,14 +3,11 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/admin/includes/functions.php';
+require_once __DIR__ . '/includes/seo.php';
 
 $conn = getDBConnection();
+seoApplyMeta(buildLiveTvListingSeoMeta($conn));
 $site_name = getSetting($conn, 'site_name', 'StreamFlix');
-
-// SEO meta data for Live TV page
-$page_title = "Watch Live TV Online Free - HD Streaming Channels | {$site_name}";
-$meta_description = "Watch live TV online free - Stream thousands of HD live TV channels including sports, news, entertainment, movies, and more. Free online live streaming with no registration required.";
-$meta_keywords = "live tv, watch live tv, online tv, online live streaming, free live tv, live tv channels, watch tv online, streaming tv, live streaming, hd live tv, online television, live tv free, streaming channels, watch live streaming, online tv channels, live tv online free, free streaming tv, live tv streaming, watch tv live, online live tv";
 
 // Check if Live TV section is enabled
 if (!isSectionEnabled($conn, 'live_tv')) {

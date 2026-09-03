@@ -53,6 +53,7 @@ $meta_keywords = $GLOBALS['meta_keywords'] ?? '';
 $canonical_url = $GLOBALS['canonical_url'] ?? '';
 $og_image = $GLOBALS['og_image'] ?? '';
 $og_type = $GLOBALS['og_type'] ?? 'video.movie';
+$seo_json_ld = $GLOBALS['seo_json_ld'] ?? null;
 
 $cast = parseMovieCast($movie['cast_data'] ?? '[]');
 $tags = parseMovieTags($movie['tags'] ?? '');

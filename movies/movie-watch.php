@@ -87,6 +87,7 @@ if ($movie) {
     $metaDescription = $seo['meta_description'];
     $metaKeywords = $seo['meta_keywords'];
     $canonical_url = $seo['canonical_url'];
+    $seo_json_ld = $seo['seo_json_ld'] ?? null;
     $poster_url = moviePosterUrl($movie);
     $movie_title = $movie['title'] ?? 'Movie';
     $movie_year = !empty($movie['release_year']) ? (int) $movie['release_year'] : 0;
@@ -97,6 +98,7 @@ if ($movie) {
     $metaDescription = "Requested movie could not be found on {$site_name}.";
     $metaKeywords = 'movies, streaming';
     $canonical_url = url('movies');
+    $seo_json_ld = null;
     $poster_url = '';
     $movie_title = 'Movie';
     $movie_year = 0;
@@ -118,7 +120,6 @@ if ($movie && !$error) {
 ?>
 <?php
 $current_page = 'movie-watch.php';
-$mobile_nav_path = $_SERVER['REQUEST_URI'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -129,6 +130,7 @@ $mobile_nav_path = $_SERVER['REQUEST_URI'] ?? '';
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
     <meta name="description" content="<?php echo htmlspecialchars($metaDescription); ?>">
     <meta name="keywords" content="<?php echo htmlspecialchars($metaKeywords); ?>">
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
     <?php if ($movie): ?>
     <meta property="og:type" content="video.movie">
     <meta property="og:title" content="<?php echo htmlspecialchars($pageTitle); ?>">
@@ -139,11 +141,25 @@ $mobile_nav_path = $_SERVER['REQUEST_URI'] ?? '';
     <?php endif; ?>
     <?php endif; ?>
     <link rel="canonical" href="<?php echo htmlspecialchars($canonical_url); ?>">
+    <?php
+    if (!empty($seo_json_ld)) {
+        renderSeoJsonLd($seo_json_ld);
+    }
+    $custom_css = getPublicCustomCode($conn, 'custom_css');
+    if ($custom_css !== '') {
+        echo "<style id=\"site-custom-css\">\n" . $custom_css . "\n</style>\n";
+    }
+    renderPublicCustomCode($conn, 'custom_code_head');
+    ?>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style><?php include __DIR__ . '/../includes/watch-player-layout-styles.php'; ?></style>
 </head>
 <body class="bg-black text-white">
+<?php
+renderPublicCustomCode($conn, 'custom_code_body');
+renderPublicCustomCode($conn, 'custom_code_after_header');
+?>
 
 <?php if ($error || !$movie): ?>
     <div class="error-page">
